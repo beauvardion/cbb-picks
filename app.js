@@ -132,6 +132,14 @@
     } else if (isNum(b.to1)) {
       to = `At ${priceTxt(-110)}, still a bet ${b.side === "Over" ? "up to" : "down to"} <b>${b.side} ${b.to1}</b>.`;
     }
+    // playable to: each line moving against the pick, with the worst price that still gets 1u / 2u
+    const lineTxt = v => S ? spreadTxt(v) : `${b.side} ${v}`;
+    const worst = p => !isNum(p) ? "—" : p <= -300 ? "any price" : `${priceTxt(p)} or better`;
+    const play = (b.play || []).map(([ln, p1, p2]) => `<tr class="${ln === b.line ? "best" : ""}">
+        <td>${lineTxt(ln)}</td><td class="r">${worst(p1)}</td><td class="r">${isNum(p2) ? worst(p2) : "—"}</td></tr>`).join("");
+    const last = (b.play || []).length ? b.play[b.play.length - 1] : null;
+    const playHtml = play ? `<div class="tbl"><table><thead><tr><th>Line</th><th class="r">1 unit if price is</th><th class="r">2 units if price is</th></tr></thead><tbody>${play}</tbody></table></div>
+      <div class="small">Playable down to <b>${lineTxt(last[0])} at ${priceTxt(last[1])}</b>. Worse than any row here, no bet. "${priceTxt(-110)} or better" means ${priceTxt(-110)}, ${priceTxt(-105)}, +100 and so on.</div>` : "";
     const cons = isNum(b.cons_line) ? `Consensus ${S ? spreadTxt(b.cons_line) : b.side + " " + b.cons_line} (${priceTxt(b.cons_price)}): cover ${pct(b.cons_cover)}, EV ${evTxt(b.cons_ev)}.` : "";
     // books
     const books = (b.books || []).map(x => {
@@ -161,9 +169,10 @@
         <section class="sec"><h3>The bet</h3>
           ${kv([["Units", unitsTxt(b.units)], ["Edge", S ? signed(b.edge) + " pts" : signed(b.edge) + " pts"], ["Cover", pct(b.cover)], isNum(b.push) && b.push > 0.001 ? ["Push", pct(b.push)] : null, ["EV / unit", evTxt(b.ev)]])}
           <div class="note">${why}</div>
-          ${to ? `<div class="note">${to}</div>` : ""}
+          ${to && !play ? `<div class="note">${to}</div>` : ""}
           ${cons ? `<div class="small num">${cons}</div>` : ""}
         </section>
+        ${playHtml ? `<section class="sec"><h3>Playable to</h3>${playHtml}</section>` : ""}
         <section class="sec"><h3>Every sportsbook</h3>
           ${books ? `<div class="tbl"><table><thead><tr><th>Book</th><th class="r">Line</th><th class="r">Price</th><th class="r hide-sm">Cover</th><th class="r">EV</th><th class="r">Bet?</th></tr></thead><tbody>${books}</tbody></table></div>
           <div class="small">Highlighted row is the line the bet was made at. "No bet" means that line or price fails the staking rule.</div>` : `<div class="small">No book-by-book lines saved for this game.</div>`}
