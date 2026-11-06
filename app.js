@@ -128,9 +128,9 @@
       const p = [];
       if (isNum(b.to2)) p.push(`<b>2u</b> through ${spreadTxt(b.to2)}`);
       if (isNum(b.to1)) p.push(`<b>1u</b> through ${spreadTxt(b.to1)}`);
-      to = p.length ? `At ${priceTxt(-110)}, ${esc(b.pick)} is still a bet: ${p.join(", ")}. Past ${spreadTxt(isNum(b.to1) ? b.to1 : b.to2)}, no bet.` : "";
+      to = p.length ? `At a ${priceTxt(-110)} price, ${esc(b.pick)} is still a bet: ${p.join(", ")}. A better price (like ${priceTxt(-105)}) can still qualify at a worse line; the books table below checks each one.` : "";
     } else if (isNum(b.to1)) {
-      to = `At ${priceTxt(-110)}, still a bet ${b.side === "Over" ? "up to" : "down to"} <b>${b.side} ${b.to1}</b>.`;
+      to = `At a ${priceTxt(-110)} price, still a bet ${b.side === "Over" ? "up to" : "down to"} <b>${b.side} ${b.to1}</b>. A better price can still qualify past that; the books table below checks each one.`;
     }
     // playable to: each line moving against the pick, with the worst price that still gets 1u / 2u
     const lineTxt = v => S ? spreadTxt(v) : `${b.side} ${v}`;
