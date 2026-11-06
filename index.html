@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CBB Model Picks</title>
+<meta name="description" content="Daily college basketball model picks, results and performance.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Saira+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="#today">CBB <span>Model</span></a>
+    <nav class="nav" aria-label="Pages">
+      <a href="#today" data-view="today">Today</a>
+      <a href="#results" data-view="results">Results</a>
+      <a href="#performance" data-view="performance">Performance</a>
+    </nav>
+    <span class="updated num" id="updated"></span>
+  </div>
+</header>
+<main class="wrap" id="app"></main>
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-title"></dialog>
+<script src="data/site_data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
