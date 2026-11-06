@@ -324,7 +324,7 @@
     const edgeB = [[2, 3], [3, 4], [4, 5], [5, 99]], evB = [[0.04, 0.06], [0.06, 0.08], [0.08, 9]];
     const months = [...new Set(rows.map(r => r.date.slice(0, 7)))].sort();
     app.innerHTML = `${banners()}
-      <div class="head"><div><h1>Performance</h1><p>Season to date, staked bets under the live rule. Spreads: ${esc((D.rule || {}).spread || "")}. Totals: ${esc((D.rule || {}).total || "")}.</p></div></div>
+      <div class="head"><div><h1>Performance</h1><p>Season to date, staked bets under the live rule. Spreads: ${esc((D.rule || {}).spread || "")}. Totals: ${esc((D.rule || {}).total || "")}.${(D.rule || {}).books ? ` Books: ${esc(D.rule.books)}.` : ""}</p></div></div>
       ${statTiles(s)}
       <div class="stats">
         <div class="stat"><span>Win rate</span><strong>${s.w + s.l ? pct(s.w / (s.w + s.l)) : "—"}</strong><small>break-even about 52.4% at ${MINUS}110</small></div>
