@@ -1,18 +1,22 @@
-/* CBB Model picks site. One visual world: a night-game scoreboard.
+/* CBB Model picks site. One visual world: a matte-black scoreboard with a glowing green accent.
    Layout idea: sticky top bar with three views; Today is a grid of matchup tiles grouped by tip time,
    each tile opens a detail sheet (bottom sheet on phones, side panel on laptops). */
 :root {
-  --bg: #0b1e2d;
-  --tile: #10293d;
-  --raise: #143149;
-  --line: #1f4058;
-  --ink: #f2f6f9;
-  --muted: #86a3b8;
-  --hot: #ff7a45;
-  --pick: #173d58;
-  --win: #3ccf91;
-  --loss: #ff6b6b;
-  --push: #c2cfda;
+  /* Money green: matte black and true greys, deep bankroll green with a light glow */
+  --bg: #0d0d0d;
+  --tile: #171717;
+  --raise: #1f1f1f;
+  --line: #2a2a2a;
+  --ink: #f0f0f0;
+  --muted: #9a9a9a;
+  --hot: #1fd16b;
+  --pick: #14281c;
+  --win: #1fd16b;
+  --loss: #f25c5c;
+  --push: #c4c4c4;
+  --glow: rgba(31, 209, 107, .4);
+  --barbg: rgba(13, 13, 13, .96);
+  --on-hot: #03170a;
   --font-display: "Saira Condensed", "Arial Narrow", system-ui, sans-serif;
   --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: dark;
@@ -26,7 +30,7 @@ button { font: inherit; color: inherit; }
 :focus-visible { outline: 3px solid var(--hot); outline-offset: 2px; }
 
 /* ---------- top bar ---------- */
-.bar { position: sticky; top: 0; z-index: 5; background: rgba(11, 30, 45, .96); border-bottom: 1px solid var(--line);
+.bar { position: sticky; top: 0; z-index: 5; background: var(--barbg); border-bottom: 1px solid var(--line);
   backdrop-filter: blur(6px); }
 .bar-in { max-width: 1240px; margin: 0 auto; padding: 10px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
 .brand { font: 700 1.35rem/1 var(--font-display); text-transform: uppercase; letter-spacing: .05em; text-decoration: none; }
@@ -49,7 +53,7 @@ button { font: inherit; color: inherit; }
 .head p { margin: 6px 0 0; color: var(--muted); font-size: .9rem; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { background: var(--tile); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: .88rem; cursor: pointer; }
-.chip[aria-pressed="true"] { background: var(--hot); border-color: var(--hot); color: #1b0d05; font-weight: 600; }
+.chip[aria-pressed="true"] { background: var(--hot); border-color: var(--hot); color: var(--on-hot); font-weight: 600; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; }
 .stat { background: var(--tile); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; }
 .stat span { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; }
@@ -92,7 +96,7 @@ button { font: inherit; color: inherit; }
 
 /* ---------- detail sheet ---------- */
 dialog.sheet { border: 0; padding: 0; background: transparent; color: var(--ink); max-width: none; max-height: none; }
-dialog.sheet::backdrop { background: rgba(3, 10, 16, .66); }
+dialog.sheet::backdrop { background: rgba(0, 0, 0, .7); }
 .sheet-in { background: var(--bg); border: 1px solid var(--line); display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
 @media (min-width: 761px) {
   dialog.sheet { margin: 0 0 0 auto; height: 100%; width: min(560px, 100vw); }
@@ -130,7 +134,7 @@ tr.best td { background: var(--pick); }
 tr.best td:first-child { box-shadow: inset 3px 0 0 var(--hot); }
 tr.nobet td { color: var(--muted); }
 .u-pill { font: 700 .8rem var(--font-display); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--hot); color: var(--hot); }
-.u-pill.two { background: var(--hot); color: #1b0d05; }
+.u-pill.two { background: var(--hot); color: var(--on-hot); }
 .score { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; background: var(--tile); border: 1px solid var(--line);
   border-radius: 8px; padding: 10px 12px; }
 .score .s { font: 700 1.35rem var(--font-display); font-variant-numeric: tabular-nums; text-align: right; }
@@ -164,3 +168,13 @@ tr.nobet td { color: var(--muted); }
   .hide-sm { display: none; }
   .row { grid-template-columns: 70px 28px minmax(0, 1fr) auto; gap: 4px 8px; }
 }
+
+/* ---------- glow (Money green) ---------- */
+.tile, .stat, .panel, .rows { background-image: linear-gradient(180deg, rgba(255, 255, 255, .035), transparent 40%); }
+.team .ln, .sh-bet em, .row .p, .brand span { text-shadow: 0 0 9px var(--glow); }
+.stat strong { color: var(--hot); text-shadow: 0 0 9px var(--glow); }
+.stat strong.neg { color: var(--loss); text-shadow: 0 0 9px rgba(242, 92, 92, .35); }
+.team.pk { box-shadow: inset 4px 0 0 var(--hot), inset 10px 0 18px -10px var(--glow); }
+.chip[aria-pressed="true"], .u-pill.two { box-shadow: 0 0 12px var(--glow); }
+.dots i.f { box-shadow: 0 0 6px var(--glow); }
+.nav a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--hot), 0 6px 14px -10px var(--glow); }
