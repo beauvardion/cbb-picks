@@ -120,9 +120,9 @@
     const S = b.market === "Spread";
     const kv = (pairs, wide) => `<div class="kv${wide ? " wide" : ""}">${pairs.filter(Boolean).map(([k, v]) => `<div><span>${k}</span><strong>${v}</strong></div>`).join("")}</div>`;
     // why it qualified
-    const why = S
-      ? `Edge <b>${signed(b.edge)} pts</b> ${b.units >= 2 ? "is 5 or more" : "is between 2 and 5"} and EV <b>${evTxt(b.ev)}</b> is above 0, so <b>${unitsTxt(b.units)}</b>.`
-      : `EV <b>${evTxt(b.ev)}</b> is 4% or more, so <b>${unitsTxt(b.units)}</b>.`;
+    const rule = ((D.rule || {})[S ? "spread" : "total"]) || "";
+    const why = `Edge <b>${signed(b.edge)} pts</b> and EV <b>${evTxt(b.ev)}</b> qualify for <b>${unitsTxt(b.units)}</b>`
+      + (rule ? ` under the ${S ? "spread" : "total"} rule: ${esc(rule)}.` : ".");
     let to = "";
     if (S) {
       const p = [];
