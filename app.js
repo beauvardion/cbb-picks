@@ -117,7 +117,50 @@
   // ---------- detail sheet ----------
   function openDetail(id) {
     const b = (TODAY.bets || []).find(x => x.id === id);
-    if (!b) return;
+    if (b) renderDetail(b, null);
+  }
+  // Results: the day's details live in data/days/<date>.json (written by export_site.py), loaded on first click
+  const dayCache = {};
+  function loadDay(date) {
+    if (!dayCache[date]) {
+      const v = String(D.generated || "").replace(/\D/g, "");
+      dayCache[date] = fetch(`data/days/${date}.json?v=${v}`).then(r => r.ok ? r.json() : null).catch(() => null);
+    }
+    return dayCache[date];
+  }
+  function openResult(date, id) {
+    const r = RESULTS.find(x => x.date === date && x.id === id);
+    if (!r) return;
+    loadDay(date).then(day => {
+      const b = day && (day.bets || []).find(x => x.id === id);
+      if (b) renderDetail(b, r); else renderBare(r);
+    });
+  }
+  function resultSection(r) {
+    const res = graded(r) ? `<span class="res ${r.result}">${r.result === "Win" ? "WIN" : r.result === "Loss" ? "LOSS" : "PUSH"}</span>`
+      : `<span class="pend">${r.result === "Pending" ? "PENDING" : "NO RESULT"}</span>`;
+    return `<section class="sec"><h3>Result</h3>
+      <div class="kv"><div><span>Result</span><strong>${res}</strong></div>
+        <div><span>Final (away-home)</span><strong>${r.final ? esc(r.final) : "—"}</strong></div>
+        <div><span>Profit</span><strong class="${cls(r.profit)}">${graded(r) ? profitTxt(r.profit) : "—"}</strong></div>
+        <div><span>CLV</span><strong class="${cls(r.clv)}">${isNum(r.clv) ? signed(r.clv) + " pts" : "—"}</strong></div></div>
+      <p class="small">Graded at the price the bet was made: ${esc(r.bet)} ${priceTxt(r.price)} at ${esc(r.book)}, ${unitsTxt(r.units)}.</p>
+    </section>`;
+  }
+  function renderBare(r) {
+    sheet.innerHTML = `<div class="sheet-in">
+      <div class="sh-head">
+        <div class="sh-top"><span>${dateTxt(r.date, false)} &middot; ${r.market} &middot; ${unitsTxt(r.units)} ${dots(r.units)}</span>
+          <button type="button" class="close" id="sheet-close">Close</button></div>
+        <div class="sh-bet" id="sheet-title">${esc(r.bet)}</div>
+        <div class="sh-sub num">${priceTxt(r.price)} at ${esc(r.book)} &middot; ${esc(r.game)}</div>
+      </div>
+      <div class="sh-body">${resultSection(r)}
+        <section class="sec"><p class="small">Full details weren't saved for this bet.</p></section></div></div>`;
+    sheet.querySelector("#sheet-close").addEventListener("click", () => sheet.close());
+    if (typeof sheet.showModal === "function") sheet.showModal(); else sheet.setAttribute("open", "");
+  }
+  function renderDetail(b, res) {
     const S = b.market === "Spread";
     const kv = (pairs, wide) => `<div class="kv${wide ? " wide" : ""}">${pairs.filter(Boolean).map(([k, v]) => `<div><span>${k}</span><strong>${v}</strong></div>`).join("")}</div>`;
     // why it qualified
@@ -162,12 +205,13 @@
     const place = [G.venue, [G.city, G.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
     sheet.innerHTML = `<div class="sheet-in">
       <div class="sh-head">
-        <div class="sh-top"><span>${tipTxt(b.tip)} ET &middot; ${b.market} &middot; ${unitsTxt(b.units)} ${dots(b.units)}</span>
+        <div class="sh-top"><span>${res ? dateTxt(res.date, false) + " &middot; " : ""}${tipTxt(b.tip)} ET &middot; ${b.market} &middot; ${unitsTxt(b.units)} ${dots(b.units)}</span>
           <button type="button" class="close" id="sheet-close">Close</button></div>
         <div class="sh-bet" id="sheet-title">${esc(b.pick)} <em>${S ? spreadTxt(b.line) : b.line}</em></div>
         <div class="sh-sub num">${priceTxt(b.price)} at ${esc(b.book)} &middot; ${esc(b.away)} at ${esc(b.home)}</div>
       </div>
       <div class="sh-body">
+        ${res ? resultSection(res) : ""}
         <section class="sec"><h3>The bet</h3>
           ${kv([["Units", unitsTxt(b.units)], ["Edge", S ? signed(b.edge) + " pts" : signed(b.edge) + " pts"], ["Cover", pct(b.cover)], isNum(b.push) && b.push > 0.001 ? ["Push", pct(b.push)] : null, ["EV / unit", evTxt(b.ev)]])}
           <div class="note">${why}</div>
@@ -244,7 +288,7 @@
     const byDay = {};
     rows.forEach(r => (byDay[r.date] = byDay[r.date] || []).push(r));
     const days = Object.keys(byDay).sort().reverse();
-    const row = r => `<div class="row">
+    const row = r => `<div class="row${r.id ? " click" : ""}"${r.id ? ` role="button" tabindex="0" data-date="${esc(r.date)}" data-rid="${esc(r.id)}" aria-label="Details: ${esc(r.bet)}, ${esc(r.game)}"` : ""}>
       ${graded(r) ? `<span class="res ${r.result}">${r.result === "Win" ? "WIN" : r.result === "Loss" ? "LOSS" : "PUSH"}</span>` : `<span class="pend">${r.result === "Pending" ? "PENDING" : "NO RESULT"}</span>`}
       <span class="u">${unitsTxt(r.units)}</span>
       <span class="b">${esc(r.bet)} <span class="small num">${priceTxt(r.price)} ${esc(r.book)}</span></span>
@@ -261,7 +305,7 @@
       return `<section class="day"><h2>${dateTxt(d)}<span class="num">${sub}</span></h2><div class="rows">${ordered.map(row).join("")}</div></section>`;
     }).join("") : `<div class="empty">No staked bets in this view yet.</div>`;
     app.innerHTML = `${banners()}
-      <div class="head"><div><h1>Results</h1><p>Every staked bet at the price it was made, graded after the games. Profit is in units.</p></div>
+      <div class="head"><div><h1>Results</h1><p>Every staked bet at the price it was made, graded after the games. Profit is in units. Tap a bet for its details.</p></div>
         <div class="chips" role="group" aria-label="Filter results">
           ${chip("rm", "all", "All")}${chip("rm", "spread", "Spreads")}${chip("rm", "total", "Totals")}
           ${chip("rp", "7", "7 days")}${chip("rp", "30", "30 days")}${chip("rp", "season", "Season")}
@@ -270,6 +314,11 @@
       ${body}`;
     app.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", () => { state.rMarket = b.dataset.rm; viewResults(); }));
     app.querySelectorAll("[data-rp]").forEach(b => b.addEventListener("click", () => { state.rPeriod = b.dataset.rp; viewResults(); }));
+    app.querySelectorAll(".row.click").forEach(el => {
+      const go = () => openResult(el.dataset.date, el.dataset.rid);
+      el.addEventListener("click", go);
+      el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    });
   }
 
   // ---------- PERFORMANCE ----------

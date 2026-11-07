@@ -178,3 +178,5 @@ tr.nobet td { color: var(--muted); }
 .chip[aria-pressed="true"], .u-pill.two { box-shadow: 0 0 12px var(--glow); }
 .dots i.f { box-shadow: 0 0 6px var(--glow); }
 .nav a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--hot), 0 6px 14px -10px var(--glow); }
+.row.click { cursor: pointer; }
+.row.click:hover { background: var(--line); }
