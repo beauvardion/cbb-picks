@@ -108,6 +108,7 @@
         <div class="stat"><span>Spreads</span><strong>${sp.length}</strong><small>${unitsTxt(sum(sp))}</small></div>
         <div class="stat"><span>Totals</span><strong>${to.length}</strong><small>${unitsTxt(sum(to))}</small></div>
       </div>
+      ${TODAY.early ? `<div class="small" style="margin:0 0 12px">${esc(TODAY.early)}</div>` : ""}
       ${body}`;
     app.querySelectorAll("[data-tf]").forEach(b => b.addEventListener("click", () => { state.tFilter = b.dataset.tf; viewToday(); }));
     app.querySelectorAll(".tile").forEach(t => t.addEventListener("click", () => openDetail(t.dataset.id)));
@@ -122,7 +123,8 @@
     // why it qualified
     const rule = ((D.rule || {})[S ? "spread" : "total"]) || "";
     const why = `Edge <b>${signed(b.edge)} pts</b> and EV <b>${evTxt(b.ev)}</b> qualify for <b>${unitsTxt(b.units)}</b>`
-      + (rule ? ` under the ${S ? "spread" : "total"} rule: ${esc(rule)}.` : ".");
+      + (rule ? ` under the ${S ? "spread" : "total"} rule: ${esc(rule)}.` : ".")
+      + ((D.rule || {}).early ? ` ${esc(D.rule.early)}.` : "");
     let to = "";
     if (S) {
       const p = [];
@@ -324,7 +326,7 @@
     const edgeB = [[2, 3], [3, 4], [4, 5], [5, 99]], evB = [[0.04, 0.06], [0.06, 0.08], [0.08, 9]];
     const months = [...new Set(rows.map(r => r.date.slice(0, 7)))].sort();
     app.innerHTML = `${banners()}
-      <div class="head"><div><h1>Performance</h1><p>Season to date, staked bets under the live rule. Spreads: ${esc((D.rule || {}).spread || "")}. Totals: ${esc((D.rule || {}).total || "")}.${(D.rule || {}).books ? ` Books: ${esc(D.rule.books)}.` : ""}</p></div></div>
+      <div class="head"><div><h1>Performance</h1><p>Season to date, staked bets under the live rule. Spreads: ${esc((D.rule || {}).spread || "")}. Totals: ${esc((D.rule || {}).total || "")}.${(D.rule || {}).books ? ` Books: ${esc(D.rule.books)}.` : ""}${(D.rule || {}).early ? ` ${esc(D.rule.early)}.` : ""}</p></div></div>
       ${statTiles(s)}
       <div class="stats">
         <div class="stat"><span>Win rate</span><strong>${s.w + s.l ? pct(s.w / (s.w + s.l)) : "—"}</strong><small>break-even about 52.4% at ${MINUS}110</small></div>
