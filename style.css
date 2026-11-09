@@ -201,3 +201,5 @@ tr.nobet td { color: var(--muted); }
   border: 1px solid var(--line); background: var(--tile); color: var(--ink); font: inherit; }
 .search input:focus { outline: none; border-color: var(--hot); box-shadow: 0 0 0 3px var(--glow); }
 .search input::placeholder { color: var(--muted); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 0 16px; }
+.grid2 .panel h2 .small { font-weight: 400; }

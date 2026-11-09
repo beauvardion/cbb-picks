@@ -521,8 +521,102 @@
       : `<div class="empty">The Top 25 appears after the first few days of predictions.</div>`}`;
   }
 
+
+  // ---------- BREAKDOWNS ----------
+  const bucket = (v, cuts) => { if (!isNum(v)) return null; for (const [hi, lab] of cuts) if (v < hi) return lab; return null; };
+  const BREAKDOWNS = [
+    { title: "Market", fn: r => r.market },
+    { title: "Units", fn: r => isNum(r.units) ? `${r.units}u bets` : null },
+    { title: "Favorite or underdog", only: "Spread", order: ["Favorite", "Underdog", "Pick'em"],
+      fn: r => !isNum(r.line) ? null : r.line < 0 ? "Favorite" : r.line > 0 ? "Underdog" : "Pick'em" },
+    { title: "Venue (the team bet on)", only: "Spread", order: ["Home", "Away", "Neutral site"],
+      fn: r => r.neutral ? "Neutral site" : r.side === "Home" ? "Home" : r.side === "Away" ? "Away" : null },
+    { title: "Spread size", only: "Spread", order: ["0–4.5", "5–9.5", "10–14.5", "15–19.5", "20+"],
+      fn: r => bucket(isNum(r.line) ? Math.abs(r.line) : null, [[4.75, "0–4.5"], [9.75, "5–9.5"], [14.75, "10–14.5"], [19.75, "15–19.5"], [1e9, "20+"]]) },
+    { title: "Over or under", only: "Total", order: ["Over", "Under"], fn: r => r.side === "Over" || r.side === "Under" ? r.side : null },
+    { title: "Total size", only: "Total", order: ["Under 135", "135–144.5", "145–154.5", "155+"],
+      fn: r => bucket(r.line, [[135, "Under 135"], [145, "135–144.5"], [155, "145–154.5"], [1e9, "155+"]]) },
+    { title: "Conference game", order: ["Conference", "Non-conference"],
+      fn: r => r.conf_game === true ? "Conference" : r.conf_game === false ? "Non-conference" : null },
+    { title: "Edge (points)", order: ["Under 3.5", "3.5–5", "5–7", "7+"],
+      fn: r => bucket(r.edge, [[3.5, "Under 3.5"], [5, "3.5–5"], [7, "5–7"], [1e9, "7+"]]) },
+    { title: "EV", order: ["0–2%", "2–4%", "4–6%", "6–8%", "8%+"],
+      fn: r => bucket(r.ev, [[0.02, "0–2%"], [0.04, "2–4%"], [0.06, "4–6%"], [0.08, "6–8%"], [1e9, "8%+"]]) },
+    { title: "Week of the season", fn: r => isNum(r.week) ? `Week ${r.week}` : null,
+      sort: (a, b) => parseInt(a.slice(5), 10) - parseInt(b.slice(5), 10) },
+    { title: "Sportsbook", fn: r => r.book || null, byBets: true },
+  ];
+  function viewBreakdowns() {
+    const rows = filteredResults();
+    const chip = (key, k, label) => `<button type="button" class="chip" data-${key}="${k}" aria-pressed="${state[key === "rm" ? "rMarket" : "rPeriod"] === k}">${label}</button>`;
+    const mkt = state.rMarket === "spread" ? "Spread" : state.rMarket === "total" ? "Total" : null;
+    const table = b => {
+      const pool = b.only ? rows.filter(r => r.market === b.only) : rows;
+      const groups = {};
+      pool.forEach(r => { const k = b.fn(r); if (k != null) (groups[k] = groups[k] || []).push(r); });
+      let keys = Object.keys(groups);
+      if (!keys.length) return "";
+      if (b.order) keys.sort((x, y) => (b.order.indexOf(x) + 99 * (b.order.indexOf(x) < 0)) - (b.order.indexOf(y) + 99 * (b.order.indexOf(y) < 0)));
+      else if (b.sort) keys.sort(b.sort);
+      else if (b.byBets) keys.sort((x, y) => groups[y].length - groups[x].length);
+      else keys.sort();
+      const tr = k => { const s = summarize(groups[k]);
+        return `<tr><td>${esc(k)}</td><td class="r num">${s.n}</td><td class="r num">${s.w}-${s.l}${s.p ? "-" + s.p : ""}</td>
+          <td class="r num">${s.risk.toFixed(0)}</td><td class="r num ${cls(s.prof)}">${profitTxt(s.prof)}</td>
+          <td class="r num ${cls(s.roi)}">${isNum(s.roi) ? signed(s.roi * 100, 1) + "%" : "—"}</td>
+          <td class="r num ${cls(s.clv)}">${isNum(s.clv) ? signed(s.clv, 2) : "—"}</td></tr>`; };
+      const label = b.only && !mkt ? `${b.title} <span class="small">(${b.only.toLowerCase()}s)</span>` : b.title;
+      return `<div class="panel"><h2>${label}</h2><div class="tbl"><table><thead><tr><th></th><th class="r">Graded</th><th class="r">W-L-P</th><th class="r">Risked</th><th class="r">Profit</th><th class="r">ROI</th><th class="r">CLV</th></tr></thead>
+        <tbody>${keys.map(tr).join("")}</tbody></table></div></div>`;
+    };
+    const shown = BREAKDOWNS.filter(b => !(b.only && mkt && b.only !== mkt) && !(b.title === "Market" && mkt));
+    const s = summarize(rows);
+    app.innerHTML = `${banners()}
+      <div class="head"><div><h1>Breakdowns</h1>
+        <p>This season's graded bets split different ways. Profit and ROI count the units actually risked (2u bets count twice). Small groups swing a lot — treat anything under ~50 bets as a hint, not a verdict.</p></div>
+        <div class="chips" role="group" aria-label="Market">${chip("rm", "all", "All")}${chip("rm", "spread", "Spreads")}${chip("rm", "total", "Totals")}</div>
+        <div class="chips" role="group" aria-label="Period">${chip("rp", "season", "Season")}${chip("rp", "30", "30 days")}${chip("rp", "7", "7 days")}</div></div>
+      ${s.n ? `<div class="small">${s.n} graded bets &middot; ${profitTxt(s.prof)} &middot; ROI ${isNum(s.roi) ? signed(s.roi * 100, 1) + "%" : "—"}</div>
+        <div class="grid2">${shown.map(table).join("")}</div>` : `<div class="empty">No graded bets for this filter yet.</div>`}`;
+    app.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", () => { state.rMarket = b.dataset.rm; viewBreakdowns(); }));
+    app.querySelectorAll("[data-rp]").forEach(b => b.addEventListener("click", () => { state.rPeriod = b.dataset.rp; viewBreakdowns(); }));
+  }
+
+  // ---------- MODEL ACCURACY ----------
+  function viewAccuracy() {
+    const A = D.accuracy || {};
+    const S = A.season;
+    const f2 = v => isNum(v) ? v.toFixed(2) : "—";
+    const gap = (a, b) => isNum(a) && isNum(b) ? a - b : null;
+    const tile = (label, model, market, note) => {
+      const d = gap(model, market);
+      return `<div class="stat"><span>${label}</span><strong>${f2(model)}</strong>
+        <small>market ${f2(market)} &middot; <b class="${d === null ? "" : d <= 0 ? "pos" : "neg"}">${d === null ? "—" : (d <= 0 ? "model better by " : "market better by ") + Math.abs(d).toFixed(2)}</b>${note ? " &middot; " + note : ""}</small></div>`;
+    };
+    const row = w => `<tr><td>Week ${w.week}</td><td class="r num">${w.m_n}</td>
+      <td class="r num">${f2(w.m_model)}</td><td class="r num">${f2(w.m_market)}</td><td class="r num ${(gap(w.m_model, w.m_market) ?? 0) <= 0 ? "pos" : "neg"}">${isNum(gap(w.m_model, w.m_market)) ? signed(gap(w.m_model, w.m_market), 2) : "—"}</td>
+      <td class="r num">${isNum(w.m_closer) ? pct(w.m_closer, 0) : "—"}</td><td class="r num">${isNum(w.winner) ? pct(w.winner, 0) : "—"}</td>
+      <td class="r num">${f2(w.t_model)}</td><td class="r num">${f2(w.t_market)}</td><td class="r num ${(gap(w.t_model, w.t_market) ?? 0) <= 0 ? "pos" : "neg"}">${isNum(gap(w.t_model, w.t_market)) ? signed(gap(w.t_model, w.t_market), 2) : "—"}</td>
+      <td class="r num">${isNum(w.t_bias) ? signed(w.t_bias, 1) : "—"}</td><td class="r num">${isNum(w.t_over) ? pct(w.t_over, 0) : "—"}</td></tr>`;
+    app.innerHTML = `${banners()}
+      <div class="head"><div><h1>Model accuracy</h1>
+        <p>How far the model's predicted margin and total were from the final score this season, next to the market's 7am numbers for the same games (average miss in points; lower is better). The market is the bar to beat: in the backtest the model was about even with it, slightly worse in week 1.</p></div></div>
+      ${S ? `<div class="stats">
+          ${tile("Margin: average miss", S.m_model, S.m_market, `${S.m_n} games`)}
+          <div class="stat"><span>Margin: closer than market</span><strong>${isNum(S.m_closer) ? pct(S.m_closer, 0) : "—"}</strong><small>of games &middot; picked the winner ${isNum(S.winner) ? pct(S.winner, 0) : "—"}</small></div>
+          ${tile("Total: average miss", S.t_model, S.t_market, `${S.t_n} games`)}
+          <div class="stat"><span>Total: model lean</span><strong>${isNum(S.t_bias) ? signed(S.t_bias, 1) : "—"}</strong><small>model minus actual &middot; games over the line ${isNum(S.t_over) ? pct(S.t_over, 0) : "—"}</small></div></div>
+        <div class="panel"><h2>By week</h2><div class="tbl"><table><thead>
+          <tr><th></th><th class="r">Games</th><th class="r">Margin miss</th><th class="r">Market</th><th class="r">Model − mkt</th><th class="r">Closer</th><th class="r">Winner</th>
+          <th class="r">Total miss</th><th class="r">Market</th><th class="r">Model − mkt</th><th class="r">Model lean</th><th class="r">Went over</th></tr></thead>
+          <tbody>${(A.weeks || []).map(row).join("")}</tbody></table></div></div>
+        <p class="foot">Model − mkt below 0 (green) means the model was closer than the market that week. Model lean = average (model total − actual total); "went over" = share of games that finished above the 7am total. Neutral-site games are matched by team names.</p>`
+      : `<div class="empty">Accuracy appears once this season's games have final scores.</div>`}`;
+  }
+
   // ---------- routing ----------
-  const VIEWS = { today: viewToday, slate: viewSlate, results: viewResults, performance: viewPerformance, clv: viewClv, top25: viewTop25 };
+  const VIEWS = { today: viewToday, slate: viewSlate, results: viewResults, performance: viewPerformance, breakdowns: viewBreakdowns,
+    clv: viewClv, accuracy: viewAccuracy, top25: viewTop25 };
   function route() {
     const v = (location.hash || "").slice(1);
     const key = VIEWS[v] ? v : "today";
