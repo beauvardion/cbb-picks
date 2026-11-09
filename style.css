@@ -180,3 +180,19 @@ tr.nobet td { color: var(--muted); }
 .nav a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--hot), 0 6px 14px -10px var(--glow); }
 .row.click { cursor: pointer; }
 .row.click:hover { background: var(--line); }
+
+/* slate, CLV, top 25 */
+.nav { flex-wrap: wrap; }
+@media (max-width: 720px) { .nav a { padding: 6px 8px; font-size: .9rem; letter-spacing: .04em; } }
+.slate table td, .slate table th, .top25 td, .top25 th { vertical-align: top; }
+.slate td { white-space: nowrap; }
+.slate tr.click { cursor: pointer; }
+.slate tr.click:hover, .slate tr.click:focus-visible { background: var(--line); }
+.muted { color: var(--muted); }
+.pill { display: inline-block; font-size: .78rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.pill.bet, .pill.capped { background: var(--hot); color: var(--on-hot); border-color: var(--hot); font-weight: 600; box-shadow: 0 0 10px -2px var(--glow); }
+.pill.near { border-color: var(--hot); color: var(--hot); }
+.pill.skip, .pill.early { border-style: dashed; }
+.legend { display: flex; gap: 16px; margin-top: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.hotnum { color: var(--hot); }

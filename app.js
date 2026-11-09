@@ -394,8 +394,117 @@
       <p class="foot">Early-season samples are small: a few dozen bets can swing either way on luck alone. Average CLV (how often the bet beat the closing line) is the earliest sign of a real edge.</p>`;
   }
 
+
+  // ---------- FULL SLATE ----------
+  function viewSlate() {
+    const all = TODAY.slate || [];
+    const f = state.sFilter || "all";
+    const has = (g, k) => [g.s.key, g.t.key].some(x => k.includes(x));
+    const list = all.filter(g => f === "all" || (f === "bets" && has(g, ["bet", "capped"])) || (f === "near" && has(g, ["near"])));
+    const chip = (k, label) => `<button type="button" class="chip" data-sf="${k}" aria-pressed="${f === k}">${label}</button>`;
+    const nBets = all.filter(g => has(g, ["bet", "capped"])).length, nNear = all.filter(g => has(g, ["near"])).length;
+    const fav = (g, v) => !isNum(v) ? "—" : v === 0 ? "Even" : `${esc(v > 0 ? g.home : g.away)} by ${Math.abs(v).toFixed(1)}`;
+    const pill = m => `<span class="pill ${m.key}">${esc(m.why)}</span>`;
+    const cell = (m, isSpread, g) => {
+      if (!m.pick || m.key === "none") return `<td colspan="3" class="muted">${esc(m.why)}</td>`;
+      const bet = isSpread ? `${esc(m.pick)} ${spreadTxt(m.line)}` : `${esc(m.pick)} ${isNum(m.line) ? m.line : "—"}`;
+      return `<td><strong>${bet}</strong><div class="small num">${priceTxt(m.price)}${m.book ? " " + esc(m.book) : ""}</div></td>
+        <td class="r num">${signed(m.edge)}<div class="small">${evTxt(m.ev)}</div></td>
+        <td>${m.units > 0 ? `<b class="num">${unitsTxt(m.units)}</b> ` : ""}${pill(m)}</td>`;
+    };
+    const row = g => {
+      const id = g.s.id || g.t.id;
+      return `<tr${id ? ` class="click" tabindex="0" role="button" data-id="${esc(id)}"` : ""}>
+        <td class="num">${esc(tipTxt(g.tip))}</td>
+        <td><div>${rk(g.away_rank)}${esc(g.away)}</div><div>@ ${rk(g.home_rank)}${esc(g.home)}</div></td>
+        <td><div>${fav(g, g.pm)}</div><div class="small">mkt ${isNum(g.cons_s) ? esc(g.home) + " " + spreadTxt(g.cons_s) : "—"}</div></td>
+        ${cell(g.s, true, g)}
+        <td class="num"><div>${isNum(g.pt) ? g.pt.toFixed(1) : "—"}</div><div class="small">mkt ${isNum(g.cons_t) ? g.cons_t : "—"}</div></td>
+        ${cell(g.t, false, g)}</tr>`;
+    };
+    const body = !all.length ? `<div class="empty">The full slate appears after the morning run.</div>`
+      : !list.length ? `<div class="empty">No games match this filter.</div>`
+      : `<div class="tbl slate"><table><thead><tr><th>Tip</th><th>Game</th><th>Model margin</th><th>Spread pick</th><th class="r">Edge / EV</th><th>Result</th>
+          <th>Model total</th><th>Total pick</th><th class="r">Edge / EV</th><th>Result</th></tr></thead><tbody>${list.map(row).join("")}</tbody></table></div>`;
+    app.innerHTML = `${banners()}
+      <div class="head"><div><h1>Full slate</h1>
+        <p>Every game ${TODAY.date ? "on " + dateTxt(TODAY.date) : "today"}, the model's numbers at the pick's book, and what the rule did with them. Near miss = within 0.5 pts of edge and 1% of EV of a 1u bet. Tap a bet for details.</p></div>
+        <div class="chips" role="group" aria-label="Filter slate">${chip("all", `All ${all.length}`)}${chip("bets", `With a bet ${nBets}`)}${chip("near", `Near misses ${nNear}`)}</div></div>
+      ${TODAY.early ? `<div class="small">${esc(TODAY.early)}</div>` : ""}
+      ${body}`;
+    app.querySelectorAll("[data-sf]").forEach(b => b.addEventListener("click", () => { state.sFilter = b.dataset.sf; viewSlate(); }));
+    app.querySelectorAll("tr.click").forEach(el => {
+      const go = () => openDetail(el.dataset.id);
+      el.addEventListener("click", go);
+      el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    });
+  }
+
+  // ---------- CLV TRACKER ----------
+  function clvStats(rows) {
+    const c = rows.filter(r => isNum(r.clv));
+    const avg = c.length ? c.reduce((t, r) => t + r.clv, 0) / c.length : null;
+    const beat = c.length ? c.filter(r => r.clv > 0).length / c.length : null;
+    const same = c.length ? c.filter(r => r.clv === 0).length / c.length : null;
+    return { n: c.length, all: rows.length, avg, beat, same };
+  }
+  function clvChart(weeks) {
+    if (!weeks.length) return `<div class="small">The chart appears once bets have closing lines.</div>`;
+    const W = 800, H = 240, L = 44, R = 16, T = 14, B = 30;
+    const vals = weeks.flatMap(w => [w.sp.avg, w.to.avg]).filter(isNum).concat([0, 1, -1]);
+    const step = 0.5, lo = Math.floor(Math.min(...vals) / step) * step, hi = Math.ceil(Math.max(...vals) / step) * step;
+    const y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+    const slot = (W - L - R) / weeks.length, bw = Math.min(26, slot * 0.34);
+    let grid = "";
+    for (let v = lo; v <= hi + 1e-9; v += step) grid += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="${Math.abs(v) < 1e-9 ? 1.5 : 1}"/><text x="${L - 8}" y="${y(v) + 4}" fill="var(--muted)" font-size="12" text-anchor="end">${v > 0 ? "+" : v < 0 ? MINUS : ""}${Math.abs(v)}</text>`;
+    const bars = weeks.map((w, i) => {
+      const cx = L + slot * (i + 0.5);
+      const bar = (v, dx, fill, op) => isNum(v) ? `<rect x="${cx + dx}" y="${Math.min(y(v), y(0))}" width="${bw}" height="${Math.max(1, Math.abs(y(v) - y(0)))}" fill="${fill}" opacity="${op}" rx="2"><title>Week ${w.week} ${dx < 0 ? "spreads" : "totals"}: ${signed(v, 2)} pts</title></rect>` : "";
+      return bar(w.sp.avg, -bw - 1, "var(--hot)", 1) + bar(w.to.avg, 1, "var(--ink)", .55)
+        + `<text x="${cx}" y="${H - 10}" fill="var(--muted)" font-size="12" text-anchor="middle">Wk ${w.week}</text>`;
+    }).join("");
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Average CLV in points by week, spreads and totals">${grid}${bars}</svg>
+      <div class="legend small"><span><i style="background:var(--hot)"></i>Spreads</span><span><i style="background:var(--ink);opacity:.55"></i>Totals</span></div>`;
+  }
+  function viewClv() {
+    const rows = RESULTS;
+    const sp = rows.filter(r => r.market === "Spread"), to = rows.filter(r => r.market === "Total");
+    const a = clvStats(rows), s = clvStats(sp), t = clvStats(to);
+    const wk = [...new Set(rows.map(r => r.week).filter(isNum))].sort((x, y) => x - y);
+    const weeks = wk.map(w => ({ week: w, sp: clvStats(sp.filter(r => r.week === w)), to: clvStats(to.filter(r => r.week === w)),
+      all: clvStats(rows.filter(r => r.week === w)), res: summarize(rows.filter(r => r.week === w)) })).filter(w => w.all.n);
+    const tile = (label, x, note) => `<div class="stat"><span>${label}</span><strong class="${cls(x.avg)}">${isNum(x.avg) ? signed(x.avg, 2) : "—"}</strong><small>${x.n ? `${pct(x.beat, 0)} beat the close &middot; ${x.n} bets` : "no closing lines yet"}${note ? " &middot; " + note : ""}</small></div>`;
+    const trow = w => `<tr><td>Week ${w.week}</td><td class="r">${w.all.n}/${w.all.all}</td>
+      <td class="r ${cls(w.sp.avg)}">${isNum(w.sp.avg) ? signed(w.sp.avg, 2) : "—"}</td><td class="r">${isNum(w.sp.beat) ? pct(w.sp.beat, 0) : "—"}</td>
+      <td class="r ${cls(w.to.avg)}">${isNum(w.to.avg) ? signed(w.to.avg, 2) : "—"}</td><td class="r">${isNum(w.to.beat) ? pct(w.to.beat, 0) : "—"}</td>
+      <td class="r ${cls(w.res.prof)}">${profitTxt(w.res.prof)}</td></tr>`;
+    app.innerHTML = `${banners()}
+      <div class="head"><div><h1>CLV tracker</h1>
+        <p>Closing line value: how many points better the bet's line was than the closing line. It shows whether the model is beating the market long before wins and losses do. In the backtest the rule averaged about +0.7 on spreads and +1.2 on totals; a lasting drop toward 0 is the warning sign.</p></div></div>
+      <div class="stats">${tile("All bets", a)}${tile("Spreads", s, "backtest ~+0.7")}${tile("Totals", t, "backtest ~+1.2")}
+        <div class="stat"><span>Exactly the close</span><strong>${isNum(a.same) ? pct(a.same, 0) : "—"}</strong><small>no line move either way</small></div></div>
+      <div class="panel chart"><h2>Average CLV by week (points)</h2>${clvChart(weeks)}</div>
+      <div class="panel"><h2>By week</h2>${weeks.length ? `<div class="tbl"><table><thead><tr><th></th><th class="r">With close</th><th class="r">Spread CLV</th><th class="r">Beat</th><th class="r">Total CLV</th><th class="r">Beat</th><th class="r">Profit</th></tr></thead><tbody>${weeks.map(trow).join("")}</tbody></table></div>` : `<div class="small">No bets with closing lines yet.</div>`}</div>
+      <p class="foot">Closing lines come from the CBBD closing numbers after each game day; bets without one are left out of the averages.</p>`;
+  }
+
+  // ---------- TOP 25 ----------
+  function viewTop25() {
+    const T = D.top25 || { teams: [] };
+    const move = x => !isNum(x.prev) ? `<span class="muted">new</span>` : x.prev === x.rank ? `<span class="muted">–</span>`
+      : x.prev > x.rank ? `<span class="pos">▲${x.prev - x.rank}</span>` : `<span class="neg">▼${x.rank - x.prev}</span>`;
+    const rows = T.teams.map(x => `<tr><td class="r num"><b>${x.rank}</b></td><td><strong>${esc(x.team)}</strong></td><td>${esc(x.conf || "")}</td>
+      <td class="r num">${esc(x.record)}</td><td class="r num"><b class="hotnum">${signed(x.rating)}</b></td><td class="r num">${move(x)}</td></tr>`).join("");
+    app.innerHTML = `${banners()}
+      <div class="head"><div><h1>Model Top 25</h1>
+        <p>The model's own power ratings: points better than an average D-I team on a neutral court, implied by its predicted margins for every game this season (recent predictions count more). Rank change is vs a week ago. Home court is worth about ${isNum(T.home_edge) ? T.home_edge.toFixed(1) : "—"} points.</p></div></div>
+      ${T.teams.length ? `<div class="panel"><div class="tbl top25"><table><thead><tr><th class="r">#</th><th>Team</th><th>Conf</th><th class="r">Record</th><th class="r">Rating</th><th class="r">vs last wk</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+      <p class="foot">${T.rated || 0} teams rated. Early in the season the ratings lean on preseason information and few games, so expect bigger moves.</p>`
+      : `<div class="empty">The Top 25 appears after the first few days of predictions.</div>`}`;
+  }
+
   // ---------- routing ----------
-  const VIEWS = { today: viewToday, results: viewResults, performance: viewPerformance };
+  const VIEWS = { today: viewToday, slate: viewSlate, results: viewResults, performance: viewPerformance, clv: viewClv, top25: viewTop25 };
   function route() {
     const v = (location.hash || "").slice(1);
     const key = VIEWS[v] ? v : "today";
