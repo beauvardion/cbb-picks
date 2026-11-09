@@ -196,3 +196,8 @@ tr.nobet td { color: var(--muted); }
 .legend { display: flex; gap: 16px; margin-top: 6px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 .hotnum { color: var(--hot); }
+.search { margin: 0 0 12px; }
+.search input { width: 100%; max-width: 420px; box-sizing: border-box; padding: 10px 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--tile); color: var(--ink); font: inherit; }
+.search input:focus { outline: none; border-color: var(--hot); box-shadow: 0 0 0 3px var(--glow); }
+.search input::placeholder { color: var(--muted); }

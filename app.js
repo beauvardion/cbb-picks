@@ -400,7 +400,14 @@
     const all = TODAY.slate || [];
     const f = state.sFilter || "all";
     const has = (g, k) => [g.s.key, g.t.key].some(x => k.includes(x));
-    const list = all.filter(g => f === "all" || (f === "bets" && has(g, ["bet", "capped"])) || (f === "near" && has(g, ["near"])));
+    const norm = x => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, "");
+    const matches = g => {
+      const q = norm(state.sQuery).trim();
+      if (!q) return true;
+      const hay = norm(`${g.away} ${g.home}`);
+      return q.split(/\s+/).every(w => hay.includes(w));
+    };
+    const inFilter = g => f === "all" || (f === "bets" && has(g, ["bet", "capped"])) || (f === "near" && has(g, ["near"]));
     const chip = (k, label) => `<button type="button" class="chip" data-sf="${k}" aria-pressed="${f === k}">${label}</button>`;
     const nBets = all.filter(g => has(g, ["bet", "capped"])).length, nNear = all.filter(g => has(g, ["near"])).length;
     const fav = (g, v) => !isNum(v) ? "—" : v === 0 ? "Even" : `${esc(v > 0 ? g.home : g.away)} by ${Math.abs(v).toFixed(1)}`;
@@ -422,22 +429,33 @@
         <td class="num"><div>${isNum(g.pt) ? g.pt.toFixed(1) : "—"}</div><div class="small">mkt ${isNum(g.cons_t) ? g.cons_t : "—"}</div></td>
         ${cell(g.t, false, g)}</tr>`;
     };
-    const body = !all.length ? `<div class="empty">The full slate appears after the morning run.</div>`
-      : !list.length ? `<div class="empty">No games match this filter.</div>`
-      : `<div class="tbl slate"><table><thead><tr><th>Tip</th><th>Game</th><th>Model margin</th><th>Spread pick</th><th class="r">Edge / EV</th><th>Result</th>
+    const bodyHtml = () => {
+      const list = all.filter(g => inFilter(g) && matches(g));
+      return !all.length ? `<div class="empty">The full slate appears after the morning run.</div>`
+        : !list.length ? `<div class="empty">No games match${state.sQuery ? ` "${esc(state.sQuery)}"` : " this filter"}.</div>`
+        : `<div class="tbl slate"><table><thead><tr><th>Tip</th><th>Game</th><th>Model margin</th><th>Spread pick</th><th class="r">Edge / EV</th><th>Result</th>
           <th>Model total</th><th>Total pick</th><th class="r">Edge / EV</th><th>Result</th></tr></thead><tbody>${list.map(row).join("")}</tbody></table></div>`;
-    app.innerHTML = `${banners()}
-      <div class="head"><div><h1>Full slate</h1>
-        <p>Every game ${TODAY.date ? "on " + dateTxt(TODAY.date) : "today"}, the model's numbers at the pick's book, and what the rule did with them. Near miss = within 0.5 pts of edge and 1% of EV of a 1u bet. Tap a bet for details.</p></div>
-        <div class="chips" role="group" aria-label="Filter slate">${chip("all", `All ${all.length}`)}${chip("bets", `With a bet ${nBets}`)}${chip("near", `Near misses ${nNear}`)}</div></div>
-      ${TODAY.early ? `<div class="small">${esc(TODAY.early)}</div>` : ""}
-      ${body}`;
-    app.querySelectorAll("[data-sf]").forEach(b => b.addEventListener("click", () => { state.sFilter = b.dataset.sf; viewSlate(); }));
-    app.querySelectorAll("tr.click").forEach(el => {
+    };
+    const wire = () => app.querySelectorAll("#slate-body tr.click").forEach(el => {
       const go = () => openDetail(el.dataset.id);
       el.addEventListener("click", go);
       el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
     });
+    app.innerHTML = `${banners()}
+      <div class="head"><div><h1>Full slate</h1>
+        <p>Every game ${TODAY.date ? "on " + dateTxt(TODAY.date) : "today"}, the model's numbers at the pick's book, and what the rule did with them. Near miss = within 0.5 pts of edge and 1% of EV of a 1u bet. Tap a bet for details.</p></div>
+        <div class="chips" role="group" aria-label="Filter slate">${chip("all", `All ${all.length}`)}${chip("bets", `With a bet ${nBets}`)}${chip("near", `Near misses ${nNear}`)}</div></div>
+      ${all.length ? `<div class="search"><input id="slate-q" type="search" placeholder="Search teams, e.g. Duke or Iona" aria-label="Search today's games by team" autocomplete="off" value="${esc(state.sQuery || "")}"></div>` : ""}
+      ${TODAY.early ? `<div class="small">${esc(TODAY.early)}</div>` : ""}
+      <div id="slate-body">${bodyHtml()}</div>`;
+    app.querySelectorAll("[data-sf]").forEach(b => b.addEventListener("click", () => { state.sFilter = b.dataset.sf; viewSlate(); }));
+    const q = app.querySelector("#slate-q");
+    if (q) q.addEventListener("input", () => {
+      state.sQuery = q.value;
+      app.querySelector("#slate-body").innerHTML = bodyHtml();
+      wire();
+    });
+    wire();
   }
 
   // ---------- CLV TRACKER ----------
