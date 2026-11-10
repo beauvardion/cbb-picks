@@ -266,8 +266,8 @@
     return { n: g.length, w, l, p, risk, prof, roi: risk ? prof / risk : null,
       clv: c.length ? c.reduce((t, r) => t + r.clv, 0) / c.length : null, beat: c.length ? c.filter(r => r.clv > 0).length / c.length : null };
   }
-  function filteredResults() {
-    let rows = RESULTS.slice();
+  function filteredResults(src) {
+    let rows = (src || RESULTS).slice();
     if (state.rMarket !== "all") rows = rows.filter(r => r.market === (state.rMarket === "spread" ? "Spread" : "Total"));
     if (state.rPeriod !== "season") {
       const days = state.rPeriod === "7" ? 7 : 30;
@@ -528,7 +528,8 @@
   const bucket = (v, cuts) => { if (!isNum(v)) return null; for (const [hi, lab] of cuts) if (v < hi) return lab; return null; };
   const BREAKDOWNS = [
     { title: "Market", fn: r => r.market },
-    { title: "Units", fn: r => isNum(r.units) ? `${r.units}u bets` : null },
+    { title: "Units", fn: r => isNum(r.staked) ? (r.staked > 0 ? `${r.staked}u bets` : "Not bet") : isNum(r.units) ? `${r.units}u bets` : null,
+      sort: (a, b) => (a === "Not bet") - (b === "Not bet") || a.localeCompare(b) },
     { title: "Favorite or underdog", only: "Spread", order: ["Favorite", "Underdog", "Pick'em"],
       fn: r => !isNum(r.line) ? null : r.line < 0 ? "Favorite" : r.line > 0 ? "Underdog" : "Pick'em" },
     { title: "Venue (the team bet on)", only: "Spread", order: ["Home", "Away", "Neutral site"],
@@ -548,9 +549,28 @@
       sort: (a, b) => parseInt(a.slice(5), 10) - parseInt(b.slice(5), 10) },
     { title: "Sportsbook", fn: r => r.book || null, byBets: true },
   ];
+  // every pick of the season (History data) as result-like rows: 1u each, "units" breakdown = what was bet
+  function histRows() {
+    const out = [];
+    (HIST || []).forEach(g => [["s", "Spread"], ["t", "Total"]].forEach(([k, mk]) => {
+      const m = g[k];
+      if (!m || !m.p) return;
+      out.push({ date: g.d, week: g.w, market: mk, side: mk === "Spread" ? (m.p === g.h ? "Home" : m.p === g.a ? "Away" : null) : m.p,
+        line: m.l, units: 1, staked: m.st || 0, result: m.r, profit: m.u, clv: m.c, edge: m.e, ev: isNum(m.ev) ? m.ev / 100 : null,
+        book: m.b, neutral: g.n, conf_game: g.cg });
+    }));
+    return out;
+  }
   function viewBreakdowns() {
-    const rows = filteredResults();
-    const chip = (key, k, label) => `<button type="button" class="chip" data-${key}="${k}" aria-pressed="${state[key === "rm" ? "rMarket" : "rPeriod"] === k}">${label}</button>`;
+    state.bSrc = state.bSrc || "bets";
+    const allPicks = state.bSrc === "all";
+    if (allPicks && HIST === null) {
+      app.innerHTML = `${banners()}<div class="head"><div><h1>Breakdowns</h1></div></div><div class="empty">Loading every pick of the season&hellip;</div>`;
+      loadHistory().then(() => { if (location.hash.replace("#", "") === "breakdowns") viewBreakdowns(); });
+      return;
+    }
+    const rows = filteredResults(allPicks ? histRows() : null);
+    const chip = (key, k, label) => `<button type="button" class="chip" data-${key}="${k}" aria-pressed="${state[key === "rm" ? "rMarket" : key === "bs" ? "bSrc" : "rPeriod"] === k}">${label}</button>`;
     const mkt = state.rMarket === "spread" ? "Spread" : state.rMarket === "total" ? "Total" : null;
     const table = b => {
       const pool = b.only ? rows.filter(r => r.market === b.only) : rows;
@@ -575,13 +595,16 @@
     const s = summarize(rows);
     app.innerHTML = `${banners()}
       <div class="head"><div><h1>Breakdowns</h1>
-        <p>This season's graded bets split different ways. Profit and ROI count the units actually risked (2u bets count twice). Small groups swing a lot — treat anything under ~50 bets as a hint, not a verdict.</p></div>
+        <p>${allPicks ? "Every model pick this season (spread and total for every game with odds), each graded at 1u — whether or not it was bet. The Units table shows how the actual bets compare with the picks that weren't bet."
+          : "This season's graded bets split different ways. Profit and ROI count the units actually risked (2u bets count twice)."} Small groups swing a lot — treat anything under ~50 as a hint, not a verdict.</p></div>
+        <div class="chips" role="group" aria-label="Which picks">${chip("bs", "bets", "Bets")}${chip("bs", "all", "All picks")}</div>
         <div class="chips" role="group" aria-label="Market">${chip("rm", "all", "All")}${chip("rm", "spread", "Spreads")}${chip("rm", "total", "Totals")}</div>
         <div class="chips" role="group" aria-label="Period">${chip("rp", "season", "Season")}${chip("rp", "30", "30 days")}${chip("rp", "7", "7 days")}</div></div>
-      ${s.n ? `<div class="small">${s.n} graded bets &middot; ${profitTxt(s.prof)} &middot; ROI ${isNum(s.roi) ? signed(s.roi * 100, 1) + "%" : "—"}</div>
+      ${s.n ? `<div class="small">${s.n} graded ${allPicks ? "picks" : "bets"} &middot; ${profitTxt(s.prof)} &middot; ROI ${isNum(s.roi) ? signed(s.roi * 100, 1) + "%" : "—"}</div>
         <div class="grid2">${shown.map(table).join("")}</div>` : `<div class="empty">No graded bets for this filter yet.</div>`}`;
     app.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", () => { state.rMarket = b.dataset.rm; viewBreakdowns(); }));
     app.querySelectorAll("[data-rp]").forEach(b => b.addEventListener("click", () => { state.rPeriod = b.dataset.rp; viewBreakdowns(); }));
+    app.querySelectorAll("[data-bs]").forEach(b => b.addEventListener("click", () => { state.bSrc = b.dataset.bs; viewBreakdowns(); }));
   }
 
   // ---------- MODEL ACCURACY ----------
