@@ -614,8 +614,90 @@
       : `<div class="empty">Accuracy appears once this season's games have final scores.</div>`}`;
   }
 
+
+  // ---------- HISTORY: every game this season, every pick graded ----------
+  let HIST = null, histLoading = null;
+  function loadHistory() {
+    if (!histLoading) {
+      const v = String(D.generated || "").replace(/\D/g, "");
+      histLoading = fetch(`data/history.json?v=${v}`).then(r => r.ok ? r.json() : []).catch(() => []).then(x => (HIST = x));
+    }
+    return histLoading;
+  }
+  function viewHistory() {
+    if (HIST === null) {
+      app.innerHTML = `${banners()}<div class="head"><div><h1>History</h1></div></div><div class="empty">Loading the season&hellip;</div>`;
+      loadHistory().then(() => { if (location.hash.replace("#", "") === "history") viewHistory(); });
+      return;
+    }
+    const st = state;
+    st.hMarket = st.hMarket || "all"; st.hBets = st.hBets || "all"; st.hLimit = st.hLimit || 150;
+    const norm = x => String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, "");
+    const chip = (key, k, label) => `<button type="button" class="chip" data-${key}="${k}" aria-pressed="${st[key === "hm" ? "hMarket" : "hBets"] === k}">${label}</button>`;
+    const legs = g => [["s", g.s], ["t", g.t]].filter(([k, m]) => m && (st.hMarket === "all" || (st.hMarket === "spread") === (k === "s"))
+      && (st.hBets === "all" || m.st > 0));
+    const matches = g => {
+      const q = norm(st.hQuery).trim();
+      if (!q) return true;
+      const hay = norm(`${g.a} ${g.h} ${g.d}`);
+      return q.split(/\s+/).every(w => hay.includes(w));
+    };
+    const stats = (games, key) => {
+      const ms = games.map(g => g[key]).filter(m => m && (st.hBets === "all" || m.st > 0));
+      const gr = ms.filter(m => ["Win", "Loss", "Push"].includes(m.r));
+      const wt = m => st.hBets === "bets" ? m.st : 1;
+      const w = gr.filter(m => m.r === "Win").length, l = gr.filter(m => m.r === "Loss").length, p = gr.length - w - l;
+      const risk = gr.reduce((t, m) => t + wt(m), 0), prof = gr.reduce((t, m) => t + (m.u || 0) * wt(m), 0);
+      const c = ms.filter(m => isNum(m.c));
+      return { picks: ms.length, n: gr.length, w, l, p, prof, roi: risk ? prof / risk : null,
+        beat: c.length ? c.filter(m => m.c > 0).length / c.length : null, clv: c.length ? c.reduce((t, m) => t + m.c, 0) / c.length : null, nc: c.length };
+    };
+    const tile = (label, s) => `<div class="stat"><span>${label}</span><strong class="${cls(s.prof)}">${s.n ? profitTxt(s.prof) : "—"}</strong>
+      <small>${s.n ? `${s.w}-${s.l}${s.p ? "-" + s.p : ""} &middot; ROI ${isNum(s.roi) ? signed(s.roi * 100, 1) + "%" : "—"}` : "nothing graded yet"}
+      <br>${isNum(s.beat) ? `CLV ${pct(s.beat, 0)} beat the close &middot; avg ${signed(s.clv, 2)}` : "no closing lines yet"}</small></div>`;
+    const pill = m => !m ? "" : `<span class="res ${m.r === "Win" || m.r === "Loss" || m.r === "Push" ? m.r : "Pending"}">${m.r === "Win" ? "W" : m.r === "Loss" ? "L" : m.r === "Push" ? "P" : "–"}</span>`;
+    const leg = (m, isS) => !m ? `<td colspan="4" class="muted">no pick</td>` :
+      `<td><strong>${esc(m.p)} ${isS ? spreadTxt(m.l) : (isNum(m.l) ? m.l : "—")}</strong>${m.st > 0 ? ` <b class="pill bet">${unitsTxt(m.st)}</b>` : ""}
+        <div class="small num">${priceTxt(m.pr)}${m.b ? " " + esc(m.b) : ""} &middot; edge ${signed(m.e)} &middot; EV ${isNum(m.ev) ? signed(m.ev, 1) + "%" : "—"}</div></td>
+       <td>${pill(m)}</td><td class="r num ${cls(m.u)}">${isNum(m.u) ? signed(m.u, 2) : ""}</td><td class="r num ${cls(m.c)}">${isNum(m.c) ? signed(m.c, 1) : ""}</td>`;
+    const all = HIST.filter(g => matches(g) && legs(g).length);
+    const sS = stats(all, "s"), sT = stats(all, "t");
+    const shown = all.slice(0, st.hLimit);
+    let lastDay = "";
+    const rows = shown.map(g => {
+      const head = g.d !== lastDay ? `<tr class="day"><td colspan="11">${dateTxt(g.d)}</td></tr>` : "";
+      lastDay = g.d;
+      return head + `<tr><td class="num">${esc(tipTxt(g.tip))}</td><td><div>${esc(g.a)}</div><div>@ ${esc(g.h)}</div></td><td class="num">${g.f ? esc(g.f) : ""}</td>
+        ${st.hMarket !== "total" ? leg(g.s, true) : ""}${st.hMarket !== "spread" ? leg(g.t, false) : ""}</tr>`;
+    }).join("");
+    const head = `<tr><th>Tip</th><th>Game</th><th>Final</th>${st.hMarket !== "total" ? `<th>Spread pick</th><th></th><th class="r">1u</th><th class="r">CLV</th>` : ""}${st.hMarket !== "spread" ? `<th>Total pick</th><th></th><th class="r">1u</th><th class="r">CLV</th>` : ""}</tr>`;
+    const body = !all.length ? `<div class="empty">No games match${st.hQuery ? ` "${esc(st.hQuery)}"` : ""}.</div>`
+      : `<div class="tbl slate hist"><table><thead>${head}</thead><tbody>${rows}</tbody></table></div>
+        ${all.length > shown.length ? `<div class="more"><button type="button" class="chip" id="h-more">Show more (${all.length - shown.length} left)</button></div>` : ""}`;
+    const tiles = `<div class="stats">${st.hMarket !== "total" ? tile(st.hBets === "bets" ? "Spread bets" : "All spread picks", sS) : ""}${st.hMarket !== "spread" ? tile(st.hBets === "bets" ? "Total bets" : "All total picks", sT) : ""}</div>`;
+    app.innerHTML = `${banners()}
+      <div class="head"><div><h1>History</h1>
+        <p>Every game this season at its earliest odds, with the model's spread and total pick graded at 1u each (green badge = an actual bet and its units). Search a team to see its record. CLV % = share of picks that beat the closing line.</p></div>
+        <div class="chips" role="group" aria-label="Market">${chip("hm", "all", "All")}${chip("hm", "spread", "Spreads")}${chip("hm", "total", "Totals")}</div>
+        <div class="chips" role="group" aria-label="Which picks">${chip("hb", "all", "All picks")}${chip("hb", "bets", "Bets only")}</div></div>
+      <div class="search"><input id="h-q" type="search" placeholder="Search teams or a date (2026-11-08)" aria-label="Search this season's games" autocomplete="off" value="${esc(st.hQuery || "")}"></div>
+      <div id="h-out">${tiles}${body}</div>`;
+    const rerender = () => { const y = window.scrollY; viewHistory(); window.scrollTo(0, y); };
+    app.querySelectorAll("[data-hm]").forEach(b => b.addEventListener("click", () => { st.hMarket = b.dataset.hm; st.hLimit = 150; rerender(); }));
+    app.querySelectorAll("[data-hb]").forEach(b => b.addEventListener("click", () => { st.hBets = b.dataset.hb; st.hLimit = 150; rerender(); }));
+    const more = app.querySelector("#h-more");
+    if (more) more.addEventListener("click", () => { st.hLimit += 300; rerender(); });
+    const q = app.querySelector("#h-q");
+    q.addEventListener("input", () => {
+      st.hQuery = q.value; st.hLimit = 150;
+      const pos = q.selectionStart;
+      viewHistory();
+      const q2 = app.querySelector("#h-q"); q2.focus(); try { q2.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+    });
+  }
+
   // ---------- routing ----------
-  const VIEWS = { today: viewToday, slate: viewSlate, results: viewResults, performance: viewPerformance, breakdowns: viewBreakdowns,
+  const VIEWS = { today: viewToday, slate: viewSlate, history: viewHistory, results: viewResults, performance: viewPerformance, breakdowns: viewBreakdowns,
     clv: viewClv, accuracy: viewAccuracy, top25: viewTop25 };
   function route() {
     const v = (location.hash || "").slice(1);

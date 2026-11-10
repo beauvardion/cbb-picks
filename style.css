@@ -203,3 +203,8 @@ tr.nobet td { color: var(--muted); }
 .search input::placeholder { color: var(--muted); }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 0 16px; }
 .grid2 .panel h2 .small { font-weight: 400; }
+.hist tr.day td { background: var(--tile); color: var(--muted); font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; padding-top: 14px; }
+.hist .res { display: inline-block; min-width: 1.6em; text-align: center; }
+.hist .pill.bet { font-size: .72rem; padding: 1px 6px; }
+.more { text-align: center; margin: 14px 0; }
+.res.Pending { color: var(--muted); border: 1px solid var(--line); }
