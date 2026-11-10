@@ -31,7 +31,7 @@
   };
   const tipMin = t => (t && /^\d{1,2}:\d{2}/.test(t)) ? t.split(":").reduce((a, b, i) => a + (i ? +b : +b * 60), 0) : 9999;
   const rk = r => isNum(r) ? `<span class="rk">#${r}</span>` : "";
-  const dots = u => `<span class="dots" aria-label="${unitsTxt(u)}">${[1, 2].map(i => `<i class="${i <= u ? "f" : ""}"></i>`).join("")}</span>`;
+  const dots = u => `<span class="dots" aria-label="${unitsTxt(u)}">${(u >= 3 ? [1, 2, 3] : [1, 2]).map(i => `<i class="${i <= u ? "f" : ""}"></i>`).join("")}</span>`;
   const betTxt = b => b.market === "Spread" ? `${b.pick} ${spreadTxt(b.line)}` : `${b.pick} ${b.line}`;
   const nowET = () => new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
   const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -182,10 +182,11 @@
     // playable to: each line moving against the pick, with the worst price that still gets 1u / 2u
     const lineTxt = v => S ? spreadTxt(v) : `${b.side} ${v}`;
     const worst = p => !isNum(p) ? "—" : p <= -300 ? "any price" : `${priceTxt(p)} or better`;
-    const play = (b.play || []).map(([ln, p1, p2]) => `<tr class="${ln === b.line ? "best" : ""}">
-        <td>${lineTxt(ln)}</td><td class="r">${worst(p1)}</td><td class="r">${isNum(p2) ? worst(p2) : "—"}</td></tr>`).join("");
+    const has3 = (b.play || []).some(r => isNum(r[3]));
+    const play = (b.play || []).map(([ln, p1, p2, p3]) => `<tr class="${ln === b.line ? "best" : ""}">
+        <td>${lineTxt(ln)}</td><td class="r">${worst(p1)}</td><td class="r">${isNum(p2) ? worst(p2) : "—"}</td>${has3 ? `<td class="r">${isNum(p3) ? worst(p3) : "—"}</td>` : ""}</tr>`).join("");
     const last = (b.play || []).length ? b.play[b.play.length - 1] : null;
-    const playHtml = play ? `<div class="tbl"><table><thead><tr><th>Line</th><th class="r">1 unit if price is</th><th class="r">2 units if price is</th></tr></thead><tbody>${play}</tbody></table></div>
+    const playHtml = play ? `<div class="tbl"><table><thead><tr><th>Line</th><th class="r">1 unit if price is</th><th class="r">2 units if price is</th>${has3 ? `<th class="r">3 units if price is</th>` : ""}</tr></thead><tbody>${play}</tbody></table></div>
       <div class="small">Playable down to <b>${lineTxt(last[0])} at ${priceTxt(last[1])}</b>. Worse than any row here, no bet. "${priceTxt(-110)} or better" means ${priceTxt(-110)}, ${priceTxt(-105)}, +100 and so on.</div>` : "";
     const cons = isNum(b.cons_line) ? `Consensus ${S ? spreadTxt(b.cons_line) : b.side + " " + b.cons_line} (${priceTxt(b.cons_price)}): cover ${pct(b.cons_cover)}, EV ${evTxt(b.cons_ev)}.` : "";
     // books
@@ -296,7 +297,7 @@
       <span class="b">${esc(r.bet)} <span class="small num">${priceTxt(r.price)} ${esc(r.book)}</span></span>
       <span class="p ${cls(r.profit)}">${graded(r) ? profitTxt(r.profit) : ""}</span>
       <span></span><span></span>
-      <span class="g">${r.market} &middot; ${esc(r.game)}${r.final ? " &middot; final " + esc(r.final) : ""}</span>
+      <span class="g">${r.market} &middot; ${esc(r.game)}${r.final ? " &middot; final " + esc(r.final) : ""}${isNum(r.edge) ? ` &middot; <span class="num">edge ${signed(r.edge)}</span>` : ""}${isNum(r.ev) ? ` &middot; <span class="num">EV ${evTxt(r.ev)}</span>` : ""}</span>
       <span class="c num">${isNum(r.clv) ? "CLV " + signed(r.clv) : ""}</span>
     </div>`;
     const body = days.length ? days.map(d => {
