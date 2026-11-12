@@ -208,3 +208,5 @@ tr.nobet td { color: var(--muted); }
 .hist .pill.bet { font-size: .72rem; padding: 1px 6px; }
 .more { text-align: center; margin: 14px 0; }
 .res.Pending { color: var(--muted); border: 1px solid var(--line); }
+.hist tr.day td.daysum { text-transform: none; letter-spacing: 0; font-size: .82rem; color: var(--ink); white-space: nowrap; }
+.hist tr.day td.daysum b { color: var(--muted); font-weight: 600; margin-right: 4px; }

@@ -668,10 +668,11 @@
       const hay = norm(`${g.a} ${g.h} ${g.d}`);
       return q.split(/\s+/).every(w => hay.includes(w));
     };
-    const stats = (games, key) => {
-      const ms = games.map(g => g[key]).filter(m => m && (st.hBets === "all" || m.st > 0));
+    const stats = (games, key, mode) => {
+      const bets = (mode || st.hBets) === "bets";
+      const ms = games.map(g => g[key]).filter(m => m && (!bets || m.st > 0));
       const gr = ms.filter(m => ["Win", "Loss", "Push"].includes(m.r));
-      const wt = m => st.hBets === "bets" ? m.st : 1;
+      const wt = m => bets ? m.st : 1;
       const w = gr.filter(m => m.r === "Win").length, l = gr.filter(m => m.r === "Loss").length, p = gr.length - w - l;
       const risk = gr.reduce((t, m) => t + wt(m), 0), prof = gr.reduce((t, m) => t + (m.u || 0) * wt(m), 0);
       const c = ms.filter(m => isNum(m.c));
@@ -689,9 +690,20 @@
     const all = HIST.filter(g => matches(g) && legs(g).length);
     const sS = stats(all, "s"), sT = stats(all, "t");
     const shown = all.slice(0, st.hLimit);
+    const byDay = {};
+    all.forEach(g => (byDay[g.d] = byDay[g.d] || []).push(g));       // whole day (not just the rows shown)
+    const line = (s, label) => !s.picks ? `<div><b>${label}</b> <span class="muted">none</span></div>`
+      : `<div><b>${label}</b> ${s.n ? `${s.w}-${s.l}${s.p ? "-" + s.p : ""}` : "pending"}`
+        + (s.n ? ` &middot; <span class="${cls(s.prof)}">${profitTxt(s.prof)}</span> &middot; ROI <span class="${cls(s.roi)}">${isNum(s.roi) ? signed(s.roi * 100, 1) + "%" : "—"}</span>` : "")
+        + ` &middot; CLV ${isNum(s.beat) ? pct(s.beat, 0) : "—"}</div>`;
+    const daySum = (dg, key, market) => line(stats(dg, key, "all"), `${market}, all picks`) + line(stats(dg, key, "bets"), "Bets");
     let lastDay = "";
     const rows = shown.map(g => {
-      const head = g.d !== lastDay ? `<tr class="day"><td colspan="11">${dateTxt(g.d)}</td></tr>` : "";
+      const dg = byDay[g.d] || [];
+      const head = g.d !== lastDay ? `<tr class="day"><td colspan="3">${dateTxt(g.d)}</td>`
+        + (st.hMarket !== "total" ? `<td colspan="4" class="daysum">${daySum(dg, "s", "Spreads")}</td>` : "")
+        + (st.hMarket !== "spread" ? `<td colspan="4" class="daysum">${daySum(dg, "t", "Totals")}</td>` : "")
+        + `</tr>` : "";
       lastDay = g.d;
       return head + `<tr><td class="num">${esc(tipTxt(g.tip))}</td><td><div>${esc(g.a)}</div><div>@ ${esc(g.h)}</div></td><td class="num">${g.f ? esc(g.f) : ""}</td>
         ${st.hMarket !== "total" ? leg(g.s, true) : ""}${st.hMarket !== "spread" ? leg(g.t, false) : ""}</tr>`;
