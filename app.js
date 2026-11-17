@@ -515,13 +515,13 @@
     const move = x => !isNum(x.prev) ? `<span class="muted">new</span>` : x.prev === x.rank ? `<span class="muted">–</span>`
       : x.prev > x.rank ? `<span class="pos">▲${x.prev - x.rank}</span>` : `<span class="neg">▼${x.rank - x.prev}</span>`;
     const rows = T.teams.map(x => `<tr><td class="r num"><b>${x.rank}</b></td><td><strong>${esc(x.team)}</strong></td><td>${esc(x.conf || "")}</td>
-      <td class="r num">${esc(x.record)}</td><td class="r num"><b class="hotnum">${signed(x.rating)}</b></td><td class="r num">${move(x)}</td></tr>`).join("");
+      <td class="r num">${esc(x.record)}</td><td class="r num"><b class="hotnum">${signed(x.rating)}</b></td><td class="r num">${isNum(x.sos) ? signed(x.sos) : "—"}</td><td class="r num">${move(x)}</td></tr>`).join("");
     app.innerHTML = `${banners()}
-      <div class="head"><div><h1>Model Top 25</h1>
-        <p>The model's own power ratings: points better than an average D-I team on a neutral court, implied by its predicted margins for every game this season (recent predictions count more). Rank change is vs a week ago. Home court is worth about ${isNum(T.home_edge) ? T.home_edge.toFixed(1) : "—"} points.</p></div></div>
-      ${T.teams.length ? `<div class="panel"><div class="tbl top25"><table><thead><tr><th class="r">#</th><th>Team</th><th>Conf</th><th class="r">Record</th><th class="r">Rating</th><th class="r">vs last wk</th></tr></thead><tbody>${rows}</tbody></table></div></div>
-      <p class="foot">${T.rated || 0} teams rated. Early in the season the ratings lean on preseason information and few games, so expect bigger moves.</p>`
-      : `<div class="empty">The Top 25 appears after the first few days of predictions.</div>`}`;
+      <div class="head"><div><h1>Model Top ${T.size || 30}</h1>
+        <p>Power ratings from this season's actual results &mdash; not predictions: points better than an average D-I team on a neutral court. Every D-I game is fitted at once, so they're adjusted for the opponent (beating good teams counts more) and for home, away or neutral site (road wins count more). Each game's margin counts at most ${T.cap || 25} points, and teams with few games are pulled slightly toward average. Updated every morning with the previous day's results. SOS = average rating of opponents faced. Rank change is vs a week ago. Home court has been worth ${isNum(T.home_edge) ? T.home_edge.toFixed(1) : "—"} points this season.</p></div></div>
+      ${T.teams.length ? `<div class="panel"><div class="tbl top25"><table><thead><tr><th class="r">#</th><th>Team</th><th>Conf</th><th class="r">Record</th><th class="r">Rating</th><th class="r">SOS</th><th class="r">vs last wk</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+      <p class="foot">${T.rated || 0} teams rated (2+ D-I games). Games against non-D-I teams don't count. Early in the season there are few games per team, so expect bigger moves.</p>`
+      : `<div class="empty">The rankings appear after the first few days of predictions.</div>`}`;
   }
 
 
