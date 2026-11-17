@@ -398,6 +398,37 @@
   }
 
 
+
+  // ---------- pick filters (Slate + History): EV %, cover %, edge, each with an optional min / max ----------
+  const FLT = [["ev", "EV %"], ["cov", "Cover %"], ["edge", "Edge (pts)"]];
+  const fltOn = () => Object.values(state.flt || {}).some(v => isNum(v));
+  function fltPass(evPct, covPct, edge) {
+    const f = state.flt || {}, v = { ev: evPct, cov: covPct, edge };
+    return FLT.every(([k]) => {
+      const lo = f[k + "Min"], hi = f[k + "Max"];
+      if (!isNum(lo) && !isNum(hi)) return true;
+      if (!isNum(v[k])) return false;
+      return (!isNum(lo) || v[k] >= lo) && (!isNum(hi) || v[k] <= hi);
+    });
+  }
+  function fltHtml() {
+    const f = state.flt || {};
+    const box = (k, end) => `<input type="number" step="any" inputmode="decimal" data-flt="${k}${end}" placeholder="${end.toLowerCase()}" aria-label="${k} ${end.toLowerCase()}" value="${isNum(f[k + end]) ? f[k + end] : ""}">`;
+    return `<div class="filters" role="group" aria-label="Filter picks">
+      ${FLT.map(([k, lab]) => `<label class="fl"><span>${lab}</span>${box(k, "Min")}<i>to</i>${box(k, "Max")}</label>`).join("")}
+      ${fltOn() ? `<button type="button" class="chip" id="flt-clear">Clear filters</button>` : ""}</div>`;
+  }
+  function fltBind(rerender) {
+    app.querySelectorAll("[data-flt]").forEach(el => el.addEventListener("change", () => {
+      state.flt = state.flt || {};
+      const v = parseFloat(el.value);
+      state.flt[el.dataset.flt] = Number.isFinite(v) ? v : null;
+      rerender();
+    }));
+    const c = app.querySelector("#flt-clear");
+    if (c) c.addEventListener("click", () => { state.flt = {}; rerender(); });
+  }
+
   // ---------- FULL SLATE ----------
   function viewSlate() {
     const all = TODAY.slate || [];
@@ -415,12 +446,14 @@
     const nBets = all.filter(g => has(g, ["bet", "capped"])).length, nNear = all.filter(g => has(g, ["near"])).length;
     const fav = (g, v) => !isNum(v) ? "—" : v === 0 ? "Even" : `${esc(v > 0 ? g.home : g.away)} by ${Math.abs(v).toFixed(1)}`;
     const pill = m => `<span class="pill ${m.key}">${esc(m.why)}</span>`;
+    const sPass = m => m && m.pick && m.key !== "none" && fltPass(isNum(m.ev) ? m.ev * 100 : null, isNum(m.cover) ? m.cover * 100 : null, m.edge);
     const cell = (m, isSpread, g) => {
       if (!m.pick || m.key === "none") return `<td colspan="3" class="muted">${esc(m.why)}</td>`;
       const bet = isSpread ? `${esc(m.pick)} ${spreadTxt(m.line)}` : `${esc(m.pick)} ${isNum(m.line) ? m.line : "—"}`;
-      return `<td><strong>${bet}</strong><div class="small num">${priceTxt(m.price)}${m.book ? " " + esc(m.book) : ""}</div></td>
-        <td class="r num">${signed(m.edge)}<div class="small">${evTxt(m.ev)}</div></td>
-        <td>${m.units > 0 ? `<b class="num">${unitsTxt(m.units)}</b> ` : ""}${pill(m)}</td>`;
+      const dim = fltOn() && !sPass(m) ? ` class="dim"` : "";
+      return `<td${dim}><strong>${bet}</strong><div class="small num">${priceTxt(m.price)}${m.book ? " " + esc(m.book) : ""}</div></td>
+        <td class="r num${dim ? " dim" : ""}">${signed(m.edge)}<div class="small">${evTxt(m.ev)}${isNum(m.cover) ? " &middot; " + pct(m.cover, 1) : ""}</div></td>
+        <td${dim}>${m.units > 0 ? `<b class="num">${unitsTxt(m.units)}</b> ` : ""}${pill(m)}</td>`;
     };
     const row = g => {
       const id = g.s.id || g.t.id;
@@ -433,11 +466,11 @@
         ${cell(g.t, false, g)}</tr>`;
     };
     const bodyHtml = () => {
-      const list = all.filter(g => inFilter(g) && matches(g));
+      const list = all.filter(g => inFilter(g) && matches(g) && (!fltOn() || sPass(g.s) || sPass(g.t)));
       return !all.length ? `<div class="empty">The full slate appears after the morning run.</div>`
         : !list.length ? `<div class="empty">No games match${state.sQuery ? ` "${esc(state.sQuery)}"` : " this filter"}.</div>`
-        : `<div class="tbl slate"><table><thead><tr><th>Tip</th><th>Game</th><th>Model margin</th><th>Spread pick</th><th class="r">Edge / EV</th><th>Result</th>
-          <th>Model total</th><th>Total pick</th><th class="r">Edge / EV</th><th>Result</th></tr></thead><tbody>${list.map(row).join("")}</tbody></table></div>`;
+        : `<div class="tbl slate"><table><thead><tr><th>Tip</th><th>Game</th><th>Model margin</th><th>Spread pick</th><th class="r">Edge / EV / cover</th><th>Result</th>
+          <th>Model total</th><th>Total pick</th><th class="r">Edge / EV / cover</th><th>Result</th></tr></thead><tbody>${list.map(row).join("")}</tbody></table></div>`;
     };
     const wire = () => app.querySelectorAll("#slate-body tr.click").forEach(el => {
       const go = () => openDetail(el.dataset.id);
@@ -449,9 +482,11 @@
         <p>Every game ${TODAY.date ? "on " + dateTxt(TODAY.date) : "today"}, the model's numbers at the pick's book, and what the rule did with them. Near miss = within 0.5 pts of edge and 1% of EV of a 1u bet. Tap a bet for details.</p></div>
         <div class="chips" role="group" aria-label="Filter slate">${chip("all", `All ${all.length}`)}${chip("bets", `With a bet ${nBets}`)}${chip("near", `Near misses ${nNear}`)}</div></div>
       ${all.length ? `<div class="search"><input id="slate-q" type="search" placeholder="Search teams, e.g. Duke or Iona" aria-label="Search today's games by team" autocomplete="off" value="${esc(state.sQuery || "")}"></div>` : ""}
+      ${all.length ? fltHtml() : ""}
       ${TODAY.early ? `<div class="small">${esc(TODAY.early)}</div>` : ""}
       <div id="slate-body">${bodyHtml()}</div>`;
     app.querySelectorAll("[data-sf]").forEach(b => b.addEventListener("click", () => { state.sFilter = b.dataset.sf; viewSlate(); }));
+    fltBind(viewSlate);
     const q = app.querySelector("#slate-q");
     if (q) q.addEventListener("input", () => {
       state.sQuery = q.value;
@@ -660,8 +695,9 @@
     st.hMarket = st.hMarket || "all"; st.hBets = st.hBets || "all"; st.hLimit = st.hLimit || 150;
     const norm = x => String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, "");
     const chip = (key, k, label) => `<button type="button" class="chip" data-${key}="${k}" aria-pressed="${st[key === "hm" ? "hMarket" : "hBets"] === k}">${label}</button>`;
+    const hPass = m => m && fltPass(m.ev, m.cv, m.e);
     const legs = g => [["s", g.s], ["t", g.t]].filter(([k, m]) => m && (st.hMarket === "all" || (st.hMarket === "spread") === (k === "s"))
-      && (st.hBets === "all" || m.st > 0));
+      && (st.hBets === "all" || m.st > 0) && hPass(m));
     const matches = g => {
       const q = norm(st.hQuery).trim();
       if (!q) return true;
@@ -670,7 +706,7 @@
     };
     const stats = (games, key, mode) => {
       const bets = (mode || st.hBets) === "bets";
-      const ms = games.map(g => g[key]).filter(m => m && (!bets || m.st > 0));
+      const ms = games.map(g => g[key]).filter(m => m && (!bets || m.st > 0) && hPass(m));
       const gr = ms.filter(m => ["Win", "Loss", "Push"].includes(m.r));
       const wt = m => bets ? m.st : 1;
       const w = gr.filter(m => m.r === "Win").length, l = gr.filter(m => m.r === "Loss").length, p = gr.length - w - l;
@@ -684,8 +720,8 @@
       <br>${isNum(s.beat) ? `CLV ${pct(s.beat, 0)} beat the close &middot; avg ${signed(s.clv, 2)}` : "no closing lines yet"}</small></div>`;
     const pill = m => !m ? "" : `<span class="res ${m.r === "Win" || m.r === "Loss" || m.r === "Push" ? m.r : "Pending"}">${m.r === "Win" ? "W" : m.r === "Loss" ? "L" : m.r === "Push" ? "P" : "–"}</span>`;
     const leg = (m, isS) => !m ? `<td colspan="4" class="muted">no pick</td>` :
-      `<td><strong>${esc(m.p)} ${isS ? spreadTxt(m.l) : (isNum(m.l) ? m.l : "—")}</strong>${m.st > 0 ? ` <b class="pill bet">${unitsTxt(m.st)}</b>` : ""}
-        <div class="small num">${priceTxt(m.pr)}${m.b ? " " + esc(m.b) : ""} &middot; edge ${signed(m.e)} &middot; EV ${isNum(m.ev) ? signed(m.ev, 1) + "%" : "—"}</div></td>
+      `<td${fltOn() && !hPass(m) ? ` class="dim"` : ""}><strong>${esc(m.p)} ${isS ? spreadTxt(m.l) : (isNum(m.l) ? m.l : "—")}</strong>${m.st > 0 ? ` <b class="pill bet">${unitsTxt(m.st)}</b>` : ""}
+        <div class="small num">${priceTxt(m.pr)}${m.b ? " " + esc(m.b) : ""} &middot; edge ${signed(m.e)} &middot; EV ${isNum(m.ev) ? signed(m.ev, 1) + "%" : "—"}${isNum(m.cv) ? ` &middot; cover ${m.cv.toFixed(1)}%` : ""}</div></td>
        <td>${pill(m)}</td><td class="r num ${cls(m.u)}">${isNum(m.u) ? signed(m.u, 2) : ""}</td><td class="r num ${cls(m.c)}">${isNum(m.c) ? signed(m.c, 1) : ""}</td>`;
     const all = HIST.filter(g => matches(g) && legs(g).length);
     const sS = stats(all, "s"), sT = stats(all, "t");
@@ -718,11 +754,13 @@
         <p>Every game this season at its earliest odds, with the model's spread and total pick graded at 1u each (green badge = an actual bet and its units). Search a team to see its record. CLV % = share of picks that beat the closing line.</p></div>
         <div class="chips" role="group" aria-label="Market">${chip("hm", "all", "All")}${chip("hm", "spread", "Spreads")}${chip("hm", "total", "Totals")}</div>
         <div class="chips" role="group" aria-label="Which picks">${chip("hb", "all", "All picks")}${chip("hb", "bets", "Bets only")}</div></div>
+      ${fltHtml()}
       <div class="search"><input id="h-q" type="search" placeholder="Search teams or a date (2026-11-08)" aria-label="Search this season's games" autocomplete="off" value="${esc(st.hQuery || "")}"></div>
       <div id="h-out">${tiles}${body}</div>`;
     const rerender = () => { const y = window.scrollY; viewHistory(); window.scrollTo(0, y); };
     app.querySelectorAll("[data-hm]").forEach(b => b.addEventListener("click", () => { st.hMarket = b.dataset.hm; st.hLimit = 150; rerender(); }));
     app.querySelectorAll("[data-hb]").forEach(b => b.addEventListener("click", () => { st.hBets = b.dataset.hb; st.hLimit = 150; rerender(); }));
+    fltBind(rerender);
     const more = app.querySelector("#h-more");
     if (more) more.addEventListener("click", () => { st.hLimit += 300; rerender(); });
     const q = app.querySelector("#h-q");

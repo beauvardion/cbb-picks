@@ -210,3 +210,11 @@ tr.nobet td { color: var(--muted); }
 .res.Pending { color: var(--muted); border: 1px solid var(--line); }
 .hist tr.day td.daysum { text-transform: none; letter-spacing: 0; font-size: .82rem; color: var(--ink); white-space: nowrap; }
 .hist tr.day td.daysum b { color: var(--muted); font-weight: 600; margin-right: 4px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 0 0 12px; }
+.filters .fl { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
+.filters .fl span { min-width: 4.6em; }
+.filters .fl i { font-style: normal; }
+.filters input { width: 4.8em; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--tile);
+  color: var(--ink); font: inherit; }
+.filters input:focus { outline: none; border-color: var(--hot); box-shadow: 0 0 0 3px var(--glow); }
+td.dim { opacity: .35; }
