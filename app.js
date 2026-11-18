@@ -411,12 +411,15 @@
       return (!isNum(lo) || v[k] >= lo) && (!isNum(hi) || v[k] <= hi);
     });
   }
-  function fltHtml() {
+  function fltHtml(hasCover) {
     const f = state.flt || {};
+    const covSet = isNum(f.covMin) || isNum(f.covMax);
+    const note = covSet && hasCover === false
+      ? `<div class="small" style="flex-basis:100%">Cover % isn't in this page's data yet &mdash; it arrives with the next morning update, so the cover filter can't match anything until then.</div>` : "";
     const box = (k, end) => `<input type="number" step="any" inputmode="decimal" data-flt="${k}${end}" placeholder="${end.toLowerCase()}" aria-label="${k} ${end.toLowerCase()}" value="${isNum(f[k + end]) ? f[k + end] : ""}">`;
     return `<div class="filters" role="group" aria-label="Filter picks">
       ${FLT.map(([k, lab]) => `<label class="fl"><span>${lab}</span>${box(k, "Min")}<i>to</i>${box(k, "Max")}</label>`).join("")}
-      ${fltOn() ? `<button type="button" class="chip" id="flt-clear">Clear filters</button>` : ""}</div>`;
+      ${fltOn() ? `<button type="button" class="chip" id="flt-clear">Clear filters</button>` : ""}${note}</div>`;
   }
   function fltBind(rerender) {
     app.querySelectorAll("[data-flt]").forEach(el => el.addEventListener("change", () => {
@@ -482,7 +485,7 @@
         <p>Every game ${TODAY.date ? "on " + dateTxt(TODAY.date) : "today"}, the model's numbers at the pick's book, and what the rule did with them. Near miss = within 0.5 pts of edge and 1% of EV of a 1u bet. Tap a bet for details.</p></div>
         <div class="chips" role="group" aria-label="Filter slate">${chip("all", `All ${all.length}`)}${chip("bets", `With a bet ${nBets}`)}${chip("near", `Near misses ${nNear}`)}</div></div>
       ${all.length ? `<div class="search"><input id="slate-q" type="search" placeholder="Search teams, e.g. Duke or Iona" aria-label="Search today's games by team" autocomplete="off" value="${esc(state.sQuery || "")}"></div>` : ""}
-      ${all.length ? fltHtml() : ""}
+      ${all.length ? fltHtml(all.some(g => isNum((g.s || {}).cover) || isNum((g.t || {}).cover))) : ""}
       ${TODAY.early ? `<div class="small">${esc(TODAY.early)}</div>` : ""}
       <div id="slate-body">${bodyHtml()}</div>`;
     app.querySelectorAll("[data-sf]").forEach(b => b.addEventListener("click", () => { state.sFilter = b.dataset.sf; viewSlate(); }));
@@ -754,7 +757,7 @@
         <p>Every game this season at its earliest odds, with the model's spread and total pick graded at 1u each (green badge = an actual bet and its units). Search a team to see its record. CLV % = share of picks that beat the closing line.</p></div>
         <div class="chips" role="group" aria-label="Market">${chip("hm", "all", "All")}${chip("hm", "spread", "Spreads")}${chip("hm", "total", "Totals")}</div>
         <div class="chips" role="group" aria-label="Which picks">${chip("hb", "all", "All picks")}${chip("hb", "bets", "Bets only")}</div></div>
-      ${fltHtml()}
+      ${fltHtml(HIST.some(g => isNum((g.s || {}).cv) || isNum((g.t || {}).cv)))}
       <div class="search"><input id="h-q" type="search" placeholder="Search teams or a date (2026-11-08)" aria-label="Search this season's games" autocomplete="off" value="${esc(st.hQuery || "")}"></div>
       <div id="h-out">${tiles}${body}</div>`;
     const rerender = () => { const y = window.scrollY; viewHistory(); window.scrollTo(0, y); };
