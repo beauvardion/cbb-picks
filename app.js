@@ -596,19 +596,19 @@
       if (!m || !m.p) return;
       out.push({ date: g.d, week: g.w, market: mk, side: mk === "Spread" ? (m.p === g.h ? "Home" : m.p === g.a ? "Away" : null) : m.p,
         line: m.l, units: 1, staked: m.st || 0, result: m.r, profit: m.u, clv: m.c, edge: m.e, ev: isNum(m.ev) ? m.ev / 100 : null,
-        book: m.b, neutral: g.n, conf_game: g.cg });
+        book: m.b, neutral: g.n, conf_game: g.cg, near: !!m.nm });
     }));
     return out;
   }
   function viewBreakdowns() {
     state.bSrc = state.bSrc || "bets";
-    const allPicks = state.bSrc === "all";
+    const allPicks = state.bSrc === "all" || state.bSrc === "near", nearOnly = state.bSrc === "near";
     if (allPicks && HIST === null) {
       app.innerHTML = `${banners()}<div class="head"><div><h1>Breakdowns</h1></div></div><div class="empty">Loading every pick of the season&hellip;</div>`;
       loadHistory().then(() => { if (location.hash.replace("#", "") === "breakdowns") viewBreakdowns(); });
       return;
     }
-    const rows = filteredResults(allPicks ? histRows() : null);
+    const rows = filteredResults(allPicks ? histRows().filter(r => !nearOnly || r.near) : null);
     const chip = (key, k, label) => `<button type="button" class="chip" data-${key}="${k}" aria-pressed="${state[key === "rm" ? "rMarket" : key === "bs" ? "bSrc" : "rPeriod"] === k}">${label}</button>`;
     const mkt = state.rMarket === "spread" ? "Spread" : state.rMarket === "total" ? "Total" : null;
     const table = b => {
@@ -634,12 +634,13 @@
     const s = summarize(rows);
     app.innerHTML = `${banners()}
       <div class="head"><div><h1>Breakdowns</h1>
-        <p>${allPicks ? "Every model pick this season (spread and total for every game with odds), each graded at 1u — whether or not it was bet. The Units table shows how the actual bets compare with the picks that weren't bet."
+        <p>${nearOnly ? "Near misses this season: picks that weren't bets but came within 0.5 pts of edge and 1% EV of a 1u tier (the same test as the Slate tab's \"Near miss\"), each graded at 1u."
+          : allPicks ? "Every model pick this season (spread and total for every game with odds), each graded at 1u — whether or not it was bet. The Units table shows how the actual bets compare with the picks that weren't bet."
           : "This season's graded bets split different ways. Profit and ROI count the units actually risked (2u bets count twice)."} Small groups swing a lot — treat anything under ~50 as a hint, not a verdict.</p></div>
-        <div class="chips" role="group" aria-label="Which picks">${chip("bs", "bets", "Bets")}${chip("bs", "all", "All picks")}</div>
+        <div class="chips" role="group" aria-label="Which picks">${chip("bs", "bets", "Bets")}${chip("bs", "all", "All picks")}${chip("bs", "near", "Near misses")}</div>
         <div class="chips" role="group" aria-label="Market">${chip("rm", "all", "All")}${chip("rm", "spread", "Spreads")}${chip("rm", "total", "Totals")}</div>
         <div class="chips" role="group" aria-label="Period">${chip("rp", "season", "Season")}${chip("rp", "30", "30 days")}${chip("rp", "7", "7 days")}</div></div>
-      ${s.n ? `<div class="small">${s.n} graded ${allPicks ? "picks" : "bets"} &middot; ${profitTxt(s.prof)} &middot; ROI ${isNum(s.roi) ? signed(s.roi * 100, 1) + "%" : "—"}</div>
+      ${s.n ? `<div class="small">${s.n} graded ${nearOnly ? "near misses" : allPicks ? "picks" : "bets"} &middot; ${profitTxt(s.prof)} &middot; ROI ${isNum(s.roi) ? signed(s.roi * 100, 1) + "%" : "—"}</div>
         <div class="grid2">${shown.map(table).join("")}</div>` : `<div class="empty">No graded bets for this filter yet.</div>`}`;
     app.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", () => { state.rMarket = b.dataset.rm; viewBreakdowns(); }));
     app.querySelectorAll("[data-rp]").forEach(b => b.addEventListener("click", () => { state.rPeriod = b.dataset.rp; viewBreakdowns(); }));
@@ -700,7 +701,7 @@
     const chip = (key, k, label) => `<button type="button" class="chip" data-${key}="${k}" aria-pressed="${st[key === "hm" ? "hMarket" : "hBets"] === k}">${label}</button>`;
     const hPass = m => m && fltPass(m.ev, m.cv, m.e);
     const legs = g => [["s", g.s], ["t", g.t]].filter(([k, m]) => m && (st.hMarket === "all" || (st.hMarket === "spread") === (k === "s"))
-      && (st.hBets === "all" || m.st > 0) && hPass(m));
+      && (st.hBets === "all" || (st.hBets === "near" ? m.nm : m.st > 0)) && hPass(m));
     const matches = g => {
       const q = norm(st.hQuery).trim();
       if (!q) return true;
@@ -708,8 +709,8 @@
       return q.split(/\s+/).every(w => hay.includes(w));
     };
     const stats = (games, key, mode) => {
-      const bets = (mode || st.hBets) === "bets";
-      const ms = games.map(g => g[key]).filter(m => m && (!bets || m.st > 0) && hPass(m));
+      const md = mode || st.hBets, bets = md === "bets";
+      const ms = games.map(g => g[key]).filter(m => m && (!bets || m.st > 0) && (md !== "near" || m.nm) && hPass(m));
       const gr = ms.filter(m => ["Win", "Loss", "Push"].includes(m.r));
       const wt = m => bets ? m.st : 1;
       const w = gr.filter(m => m.r === "Win").length, l = gr.filter(m => m.r === "Loss").length, p = gr.length - w - l;
@@ -723,7 +724,7 @@
       <br>${isNum(s.beat) ? `CLV ${pct(s.beat, 0)} beat the close &middot; avg ${signed(s.clv, 2)}` : "no closing lines yet"}</small></div>`;
     const pill = m => !m ? "" : `<span class="res ${m.r === "Win" || m.r === "Loss" || m.r === "Push" ? m.r : "Pending"}">${m.r === "Win" ? "W" : m.r === "Loss" ? "L" : m.r === "Push" ? "P" : "–"}</span>`;
     const leg = (m, isS) => !m ? `<td colspan="4" class="muted">no pick</td>` :
-      `<td${fltOn() && !hPass(m) ? ` class="dim"` : ""}><strong>${esc(m.p)} ${isS ? spreadTxt(m.l) : (isNum(m.l) ? m.l : "—")}</strong>${m.st > 0 ? ` <b class="pill bet">${unitsTxt(m.st)}</b>` : ""}
+      `<td${fltOn() && !hPass(m) ? ` class="dim"` : ""}><strong>${esc(m.p)} ${isS ? spreadTxt(m.l) : (isNum(m.l) ? m.l : "—")}</strong>${m.st > 0 ? ` <b class="pill bet">${unitsTxt(m.st)}</b>` : m.nm ? ` <b class="pill near">near miss</b>` : ""}
         <div class="small num">${priceTxt(m.pr)}${m.b ? " " + esc(m.b) : ""} &middot; edge ${signed(m.e)} &middot; EV ${isNum(m.ev) ? signed(m.ev, 1) + "%" : "—"}${isNum(m.cv) ? ` &middot; cover ${m.cv.toFixed(1)}%` : ""}</div></td>
        <td>${pill(m)}</td><td class="r num ${cls(m.u)}">${isNum(m.u) ? signed(m.u, 2) : ""}</td><td class="r num ${cls(m.c)}">${isNum(m.c) ? signed(m.c, 1) : ""}</td>`;
     const all = HIST.filter(g => matches(g) && legs(g).length);
@@ -735,7 +736,8 @@
       : `<div><b>${label}</b> ${s.n ? `${s.w}-${s.l}${s.p ? "-" + s.p : ""}` : "pending"}`
         + (s.n ? ` &middot; <span class="${cls(s.prof)}">${profitTxt(s.prof)}</span> &middot; ROI <span class="${cls(s.roi)}">${isNum(s.roi) ? signed(s.roi * 100, 1) + "%" : "—"}</span>` : "")
         + ` &middot; CLV ${isNum(s.beat) ? pct(s.beat, 0) : "—"}</div>`;
-    const daySum = (dg, key, market) => line(stats(dg, key, "all"), `${market}, all picks`) + line(stats(dg, key, "bets"), "Bets");
+    const daySum = (dg, key, market) => line(stats(dg, key, "all"), `${market}, all picks`) + line(stats(dg, key, "bets"), "Bets")
+      + line(stats(dg, key, "near"), "Near misses");
     let lastDay = "";
     const rows = shown.map(g => {
       const dg = byDay[g.d] || [];
@@ -751,12 +753,12 @@
     const body = !all.length ? `<div class="empty">No games match${st.hQuery ? ` "${esc(st.hQuery)}"` : ""}.</div>`
       : `<div class="tbl slate hist"><table><thead>${head}</thead><tbody>${rows}</tbody></table></div>
         ${all.length > shown.length ? `<div class="more"><button type="button" class="chip" id="h-more">Show more (${all.length - shown.length} left)</button></div>` : ""}`;
-    const tiles = `<div class="stats">${st.hMarket !== "total" ? tile(st.hBets === "bets" ? "Spread bets" : "All spread picks", sS) : ""}${st.hMarket !== "spread" ? tile(st.hBets === "bets" ? "Total bets" : "All total picks", sT) : ""}</div>`;
+    const tiles = `<div class="stats">${st.hMarket !== "total" ? tile(st.hBets === "bets" ? "Spread bets" : st.hBets === "near" ? "Spread near misses" : "All spread picks", sS) : ""}${st.hMarket !== "spread" ? tile(st.hBets === "bets" ? "Total bets" : st.hBets === "near" ? "Total near misses" : "All total picks", sT) : ""}</div>`;
     app.innerHTML = `${banners()}
       <div class="head"><div><h1>History</h1>
-        <p>Every game this season at its earliest odds, with the model's spread and total pick graded at 1u each (green badge = an actual bet and its units). Search a team to see its record. CLV % = share of picks that beat the closing line.</p></div>
+        <p>Every game this season at its earliest odds, with the model's spread and total pick graded at 1u each (green badge = an actual bet and its units; "near miss" = not bet, but within 0.5 pts of edge and 1% EV of a 1u bet, the same test as the Slate tab). Search a team to see its record. CLV % = share of picks that beat the closing line.</p></div>
         <div class="chips" role="group" aria-label="Market">${chip("hm", "all", "All")}${chip("hm", "spread", "Spreads")}${chip("hm", "total", "Totals")}</div>
-        <div class="chips" role="group" aria-label="Which picks">${chip("hb", "all", "All picks")}${chip("hb", "bets", "Bets only")}</div></div>
+        <div class="chips" role="group" aria-label="Which picks">${chip("hb", "all", "All picks")}${chip("hb", "bets", "Bets only")}${chip("hb", "near", "Near misses")}</div></div>
       ${fltHtml(HIST.some(g => isNum((g.s || {}).cv) || isNum((g.t || {}).cv)))}
       <div class="search"><input id="h-q" type="search" placeholder="Search teams or a date (2026-11-08)" aria-label="Search this season's games" autocomplete="off" value="${esc(st.hQuery || "")}"></div>
       <div id="h-out">${tiles}${body}</div>`;
